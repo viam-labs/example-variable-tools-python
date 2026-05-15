@@ -452,7 +452,11 @@ export function Plot({
           style={{ height: "100%", width: "100%" }}
         />
         {plot.title && <div className="plot-title-overlay">{plot.title}</div>}
-        <div className="plot-overlay-buttons">
+        <div
+          className="plot-overlay-buttons"
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+        >
           <button
             className="ghost"
             onClick={(e) => {
