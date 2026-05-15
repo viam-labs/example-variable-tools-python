@@ -11,6 +11,8 @@ interface Props {
   treeExpanded: Set<string>;
   onTreeExpandedChange: (s: Set<string>) => void;
   latest: Record<string, Scalar>;
+  width: number;
+  onWidthChange: (px: number) => void;
 }
 
 export function VariablePanel({
@@ -21,7 +23,31 @@ export function VariablePanel({
   treeExpanded,
   onTreeExpandedChange,
   latest,
+  width,
+  onWidthChange,
 }: Props) {
+  const dragStart = useRef<{ x: number; w: number } | null>(null);
+  const onResizeDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragStart.current = { x: e.clientX, w: width };
+  };
+  const onResizeMove = (e: React.PointerEvent) => {
+    if (!dragStart.current) return;
+    const { x, w } = dragStart.current;
+    onWidthChange(w + (e.clientX - x));
+  };
+  const onResizeUp = (e: React.PointerEvent) => {
+    if (dragStart.current) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      dragStart.current = null;
+    }
+  };
   const lower = search.trim().toLowerCase();
   const filtered = useMemo(
     () =>
@@ -75,7 +101,15 @@ export function VariablePanel({
   );
 
   return (
-    <div className="panel-vars">
+    <div className="panel-vars" style={{ width }}>
+      <div
+        className="panel-resize-handle"
+        onPointerDown={onResizeDown}
+        onPointerMove={onResizeMove}
+        onPointerUp={onResizeUp}
+        onPointerCancel={onResizeUp}
+        title="Drag to resize sidebar"
+      />
       <div className="search">
         <input
           type="text"

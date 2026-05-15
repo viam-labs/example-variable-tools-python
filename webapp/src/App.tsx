@@ -27,6 +27,9 @@ import {
 const LS_KEY = "variable-tools-scope:layout";
 const DEFAULT_WINDOW_SEC = 30;
 const DEFAULT_COLUMNS = 1;
+const DEFAULT_SIDEBAR_WIDTH = 280;
+const MIN_SIDEBAR_WIDTH = 180;
+const MAX_SIDEBAR_WIDTH = 600;
 
 function loadLayout(): PersistedLayout {
   try {
@@ -41,6 +44,7 @@ function loadLayout(): PersistedLayout {
       theme: parsed.theme ?? "dark",
       windowSec: parsed.windowSec ?? DEFAULT_WINDOW_SEC,
       columns: parsed.columns ?? DEFAULT_COLUMNS,
+      sidebarWidth: parsed.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH,
     };
   } catch {
     return {
@@ -50,6 +54,7 @@ function loadLayout(): PersistedLayout {
       theme: "dark",
       windowSec: DEFAULT_WINDOW_SEC,
       columns: DEFAULT_COLUMNS,
+      sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
     };
   }
 }
@@ -89,6 +94,7 @@ export function App() {
   const [theme, setTheme] = useState<"dark" | "light">(initial.theme);
   const [windowSec, setWindowSec] = useState<number>(initial.windowSec);
   const [columns, setColumns] = useState<number>(initial.columns);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(initial.sidebarWidth);
   const [paused, setPaused] = useState<boolean>(false);
   /** Persistent scrub-point timestamp (ms). Only meaningful when paused. */
   const [scrubTs, setScrubTs] = useState<number | null>(null);
@@ -126,8 +132,9 @@ export function App() {
       theme,
       windowSec,
       columns,
+      sidebarWidth,
     });
-  }, [connection, plots, treeExpanded, pollRateHz, theme, windowSec, columns]);
+  }, [connection, plots, treeExpanded, pollRateHz, theme, windowSec, columns, sidebarWidth]);
 
   // Apply window changes to all existing buffers.
   useEffect(() => {
@@ -613,7 +620,10 @@ export function App() {
         onWindowSecChange={setWindowSec}
         paused={paused}
       />
-      <div className="main">
+      <div
+        className="main"
+        style={{ gridTemplateColumns: `${sidebarWidth}px 1fr` }}
+      >
         <VariablePanel
           paths={session?.paths ?? []}
           pathsBySource={pathsBySource}
@@ -622,6 +632,10 @@ export function App() {
           treeExpanded={treeExpanded}
           onTreeExpandedChange={setTreeExpanded}
           latest={displayValues}
+          width={sidebarWidth}
+          onWidthChange={(w) =>
+            setSidebarWidth(Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, w)))
+          }
         />
         <PlotsArea
           plots={plots}

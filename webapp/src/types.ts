@@ -77,4 +77,5 @@ export interface PersistedLayout {
   theme: "dark" | "light";
   windowSec: number;
   columns: number;
+  sidebarWidth: number;
 }

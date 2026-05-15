@@ -130,6 +130,21 @@ select:focus {
   flex-direction: column;
   min-height: 0;
   background: var(--panel);
+  position: relative;
+}
+.panel-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+.panel-resize-handle:hover,
+.panel-resize-handle:active {
+  background: var(--accent);
+  opacity: 0.4;
 }
 .panel-vars .search {
   display: flex;
