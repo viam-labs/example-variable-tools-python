@@ -8,6 +8,7 @@ import { TunablesBar } from "./components/TunablesBar";
 import { VariablePanel } from "./components/VariablePanel";
 import { RingBuffer } from "./lib/ringbuffer";
 import { scalarToNumber } from "./lib/schema";
+import { tryViamAppContext } from "./lib/viam-context";
 import type {
   ConnectionConfig,
   ConnectionStatus,
@@ -77,14 +78,19 @@ function newPlotId(): string {
 
 export function App() {
   const initial = useMemo(loadLayout, []);
+  // Embed context wins over localStorage so that opening the scope from
+  // a different Viam-app machine swaps in the right credentials without
+  // the user having to clear localStorage.
+  const embedConnection = useMemo(tryViamAppContext, []);
+  const initialConnection = embedConnection ?? initial.connection;
 
   const [session, setSession] = useState<ConnectedSession | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>({
     state: "disconnected",
   });
-  const [showDialog, setShowDialog] = useState<boolean>(!initial.connection);
+  const [showDialog, setShowDialog] = useState<boolean>(!initialConnection);
   const [connection, setConnection] = useState<ConnectionConfig | undefined>(
-    initial.connection,
+    initialConnection,
   );
 
   const [search, setSearch] = useState<string>("");
