@@ -18,6 +18,13 @@
       "markdown_link": "README.md"
     }
   ],
+  "applications": [
+    {
+      "name": "variable-tools-scope",
+      "type": "single_machine",
+      "entrypoint": "apps/variable-tools-scope/index.html"
+    }
+  ],
   "entrypoint": "run.sh",
   "build": {
     "arch": ["linux/arm64", "linux/amd64"],

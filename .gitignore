@@ -9,3 +9,8 @@ __pycache__/
 # webapp safety net (webapp/.gitignore handles these inside webapp/)
 node_modules/
 dist/
+
+# Built webapp output — produced by `make webapp` from webapp/ source.
+# The Vite build emits hashed asset filenames; committing them creates
+# noise and merge conflicts.
+apps/
