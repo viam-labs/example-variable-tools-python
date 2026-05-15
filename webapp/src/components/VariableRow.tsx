@@ -61,6 +61,8 @@ export function VariableRow({
       }
     } else if (info.meta.type === "enum") {
       onSet(info, draft);
+    } else if (info.meta.type === "boolean") {
+      onSet(info, draft === "true");
     }
     setEditing(false);
   };
@@ -68,12 +70,7 @@ export function VariableRow({
   const onValueClick = (e: React.MouseEvent) => {
     if (!info.meta.tunable || !onSet) return;
     e.stopPropagation();
-    if (info.meta.type === "boolean") {
-      // Toggle in place.
-      onSet(info, !(liveValue === true));
-    } else {
-      startEdit();
-    }
+    startEdit();
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -107,6 +104,22 @@ export function VariableRow({
           </select>
         );
       }
+      if (info.meta.type === "boolean") {
+        return (
+          <select
+            className="live edit"
+            value={draft}
+            autoFocus
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onKeyDown}
+            onBlur={commit}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <option value="false">false</option>
+            <option value="true">true</option>
+          </select>
+        );
+      }
       return (
         <input
           className="live edit"
@@ -134,9 +147,7 @@ export function VariableRow({
         onClick={onValueClick}
         title={
           info.meta.tunable && onSet
-            ? info.meta.type === "boolean"
-              ? "click to toggle"
-              : "click to edit • Enter to commit • Esc to cancel"
+            ? "click to edit • Enter to commit • Esc to cancel"
             : undefined
         }
       >
