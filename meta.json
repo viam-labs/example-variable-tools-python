@@ -14,7 +14,7 @@
     {
       "api": "rdk:component:sensor",
       "model": "viam:example-variable-tools-python:aggregator",
-      "short_description": "Sensor that fans out to declared resource deps for a unified flat reading map across all their variable_tools registries.",
+      "short_description": "Aggregates variable_tools registries from declared resource deps into one flat reading map.",
       "markdown_link": "README.md"
     }
   ],
