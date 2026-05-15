@@ -99,6 +99,10 @@ export function App() {
     targetPlotId: string;
     paths: string[];
   } | null>(null);
+  /** User-driven x-axis range override (seconds, uPlot's time-scale unit).
+   * null means auto-fit to data. Lives in App so the polling loop can
+   * pan it when the scrub crosses the edge of view. */
+  const [xOverride, setXOverride] = useState<[number, number] | null>(null);
 
   // Apply theme to document root.
   useEffect(() => {
@@ -316,6 +320,17 @@ export function App() {
     [scrubBounds],
   );
 
+  /** Auto-fit data range, in seconds. */
+  const autoRange = useCallback((): [number, number] | null => {
+    const b = scrubBounds();
+    if (!b) return null;
+    return [b[0] / 1000, b[1] / 1000];
+  }, [scrubBounds]);
+
+  const currentRange = useCallback((): [number, number] | null => {
+    return xOverride ?? autoRange();
+  }, [xOverride, autoRange]);
+
   const scrubBy = useCallback(
     (deltaMs: number) => {
       setScrubTs((cur) => {
@@ -323,14 +338,82 @@ export function App() {
         const bounds = scrubBounds();
         if (!bounds) return cur;
         const [lo, hi] = bounds;
-        return Math.max(lo, Math.min(hi, cur + deltaMs));
+        const next = Math.max(lo, Math.min(hi, cur + deltaMs));
+        // Edge auto-pan: if scrub left visible range, shift xOverride to
+        // keep scrub on screen.
+        const r = currentRange();
+        if (r) {
+          const [vLoSec, vHiSec] = r;
+          const vLo = vLoSec * 1000;
+          const vHi = vHiSec * 1000;
+          if (next > vHi) {
+            const overshoot = next - vHi;
+            setXOverride([(vLo + overshoot) / 1000, (vHi + overshoot) / 1000]);
+          } else if (next < vLo) {
+            const undershoot = vLo - next;
+            setXOverride([(vLo - undershoot) / 1000, (vHi - undershoot) / 1000]);
+          }
+        }
+        return next;
       });
     },
-    [scrubBounds],
+    [scrubBounds, currentRange],
   );
 
   const stepForward = useCallback(() => scrubBy(stepMs), [scrubBy, stepMs]);
   const stepBackward = useCallback(() => scrubBy(-stepMs), [scrubBy, stepMs]);
+
+  // Zoom / pan on the x-axis. All ops update xOverride.
+  const zoomIn = useCallback(() => {
+    const r = currentRange();
+    if (!r) return;
+    const [lo, hi] = r;
+    const center = paused && scrubTs !== null ? scrubTs / 1000 : (lo + hi) / 2;
+    const q = (hi - lo) / 4;
+    setXOverride([center - q, center + q]);
+  }, [currentRange, paused, scrubTs]);
+
+  const zoomOut = useCallback(() => {
+    const r = currentRange();
+    if (!r) return;
+    const [lo, hi] = r;
+    const center = paused && scrubTs !== null ? scrubTs / 1000 : (lo + hi) / 2;
+    const span = hi - lo;
+    let newSpan = span * 2;
+    // Clamp to the buffer window — there's no data past that anyway.
+    if (newSpan > windowSec) newSpan = windowSec;
+    setXOverride([center - newSpan / 2, center + newSpan / 2]);
+  }, [currentRange, paused, scrubTs, windowSec]);
+
+  const panLeft = useCallback(() => {
+    const r = currentRange();
+    if (!r) return;
+    const [lo, hi] = r;
+    const shift = (hi - lo) / 4;
+    setXOverride([lo - shift, hi - shift]);
+  }, [currentRange]);
+
+  const panRight = useCallback(() => {
+    const r = currentRange();
+    if (!r) return;
+    const [lo, hi] = r;
+    const shift = (hi - lo) / 4;
+    setXOverride([lo + shift, hi + shift]);
+  }, [currentRange]);
+
+  const resetZoom = useCallback(() => setXOverride(null), []);
+
+  /** Pan the visible window by an absolute time delta (ms). Negative
+   * shifts the view left (earlier times). Used by middle-click drag. */
+  const panByMs = useCallback(
+    (deltaMs: number) => {
+      const r = currentRange();
+      if (!r) return;
+      const dSec = deltaMs / 1000;
+      setXOverride([r[0] + dSec, r[1] + dSec]);
+    },
+    [currentRange],
+  );
 
   // Keyframes: add at current scrub position, navigate to nearest prev/next.
   const addKeyframe = useCallback(() => {
@@ -549,6 +632,7 @@ export function App() {
           scrubTs={scrubTs}
           columns={columns}
           keyframes={keyframes}
+          xOverride={xOverride}
           onColumnsChange={setColumns}
           onPauseToggle={togglePause}
           onStepForward={stepForward}
@@ -563,6 +647,12 @@ export function App() {
           onAddSeries={addSeries}
           onRemoveSeries={removeSeries}
           onMultiDrop={handleMultiDrop}
+          onZoomIn={zoomIn}
+          onZoomOut={zoomOut}
+          onPanLeft={panLeft}
+          onPanRight={panRight}
+          onResetZoom={resetZoom}
+          onPanByMs={panByMs}
         />
       </div>
       <TunablesBar

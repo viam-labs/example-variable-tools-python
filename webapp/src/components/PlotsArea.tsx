@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import type { PathInfo, PlotPanel } from "../types";
 import type { RingBuffer } from "../lib/ringbuffer";
@@ -14,6 +14,7 @@ interface Props {
   scrubTs: number | null;
   columns: number;
   keyframes: number[];
+  xOverride: [number, number] | null;
   onColumnsChange: (n: number) => void;
   onPauseToggle: () => void;
   onStepForward: () => void;
@@ -28,22 +29,12 @@ interface Props {
   onAddSeries: (plotId: string, path: string) => void;
   onRemoveSeries: (plotId: string, path: string) => void;
   onMultiDrop: (targetPlotId: string, paths: string[]) => void;
-}
-
-/** X-axis range in seconds (uPlot's time-scale unit). null means auto-fit. */
-type XRange = [number, number] | null;
-
-function deriveAutoRange(buffers: Map<string, RingBuffer>): XRange {
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (const buf of buffers.values()) {
-    if (buf.length === 0) continue;
-    const [xs] = buf.snapshot();
-    if (xs[0] < lo) lo = xs[0];
-    if (xs[xs.length - 1] > hi) hi = xs[xs.length - 1];
-  }
-  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null;
-  return [lo / 1000, hi / 1000];
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onPanLeft: () => void;
+  onPanRight: () => void;
+  onResetZoom: () => void;
+  onPanByMs: (deltaMs: number) => void;
 }
 
 export function PlotsArea({
@@ -55,6 +46,7 @@ export function PlotsArea({
   scrubTs,
   columns,
   keyframes,
+  xOverride,
   onColumnsChange,
   onPauseToggle,
   onStepForward,
@@ -69,56 +61,17 @@ export function PlotsArea({
   onAddSeries,
   onRemoveSeries,
   onMultiDrop,
+  onZoomIn,
+  onZoomOut,
+  onPanLeft,
+  onPanRight,
+  onResetZoom,
+  onPanByMs,
 }: Props) {
   const pathsByFull = useMemo(
     () => new Map(paths.map((p) => [p.fullPath, p])),
     [paths],
   );
-
-  const [xOverride, setXOverride] = useState<XRange>(null);
-
-  const currentRange = useCallback((): [number, number] | null => {
-    if (xOverride) return xOverride;
-    return deriveAutoRange(buffers);
-  }, [xOverride, buffers]);
-
-  const zoomIn = useCallback(() => {
-    const r = currentRange();
-    if (!r) return;
-    const [lo, hi] = r;
-    const c = (lo + hi) / 2;
-    const q = (hi - lo) / 4;
-    setXOverride([c - q, c + q]);
-  }, [currentRange]);
-
-  const zoomOut = useCallback(() => {
-    const r = currentRange();
-    if (!r) return;
-    const [lo, hi] = r;
-    const c = (lo + hi) / 2;
-    const span = hi - lo;
-    setXOverride([c - span, c + span]);
-  }, [currentRange]);
-
-  const panLeft = useCallback(() => {
-    const r = currentRange();
-    if (!r) return;
-    const [lo, hi] = r;
-    const span = hi - lo;
-    const shift = span / 4;
-    setXOverride([lo - shift, hi - shift]);
-  }, [currentRange]);
-
-  const panRight = useCallback(() => {
-    const r = currentRange();
-    if (!r) return;
-    const [lo, hi] = r;
-    const span = hi - lo;
-    const shift = span / 4;
-    setXOverride([lo + shift, hi + shift]);
-  }, [currentRange]);
-
-  const resetZoom = useCallback(() => setXOverride(null), []);
 
   return (
     <div className="plots-region">
@@ -128,11 +81,11 @@ export function PlotsArea({
         onStepBackward={onStepBackward}
         onStepForward={onStepForward}
         onAddPlot={onAddPlot}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        onPanLeft={panLeft}
-        onPanRight={panRight}
-        onResetZoom={resetZoom}
+        onZoomIn={onZoomIn}
+        onZoomOut={onZoomOut}
+        onPanLeft={onPanLeft}
+        onPanRight={onPanRight}
+        onResetZoom={onResetZoom}
         columns={columns}
         onColumnsChange={onColumnsChange}
         hasPlots={plots.length > 0}
@@ -158,6 +111,7 @@ export function PlotsArea({
             tick={tick}
             paused={paused}
             scrubTs={scrubTs}
+            keyframes={keyframes}
             xOverride={xOverride}
             onRemove={() => onRemovePlot(plot.id)}
             onAddSeries={(p) => onAddSeries(plot.id, p)}
@@ -167,6 +121,7 @@ export function PlotsArea({
             onStepBackward={onStepBackward}
             onUpdate={(patch) => onUpdatePlot(plot.id, patch)}
             onMultiDrop={(paths) => onMultiDrop(plot.id, paths)}
+            onPanByMs={onPanByMs}
           />
         ))}
         {plots.length === 0 && (

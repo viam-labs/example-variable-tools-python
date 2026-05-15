@@ -28,65 +28,34 @@ export function PlotSettingsDialog({ plot, onSave, onCancel }: Props) {
       >
         <h2>Plot settings</h2>
         <div className="field">
-          <label htmlFor="title">Title (optional)</label>
+          <label htmlFor="title">Title</label>
           <input
             id="title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="leave blank for none"
+            placeholder="optional"
             autoFocus
           />
         </div>
         <div className="field">
-          <label>Y-axis scaling</label>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 12,
-              color: "var(--text)",
-              padding: "4px 0",
-            }}
-          >
-            <input
-              type="radio"
-              name="ymode"
-              value="shared"
-              checked={yMode === "shared"}
-              onChange={() => setYMode("shared")}
-            />
-            <span>
-              <b>Shared</b> — all variables on one auto-scaled y axis
-            </span>
-          </label>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 12,
-              color: "var(--text)",
-              padding: "4px 0",
-            }}
-          >
-            <input
-              type="radio"
-              name="ymode"
-              value="independent"
-              checked={yMode === "independent"}
-              onChange={() => setYMode("independent")}
-            />
-            <span>
-              <b>Independent</b> — each variable normalized to its own range
-            </span>
-          </label>
-          <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            Use independent when plotting variables with very different
-            magnitudes (e.g. a counter alongside a unit-range double).
-            Precise values stay readable in the chips at the bottom.
-          </span>
+          <label>Y-axis</label>
+          <div className="segmented">
+            <button
+              type="button"
+              className={yMode === "shared" ? "active" : ""}
+              onClick={() => setYMode("shared")}
+            >
+              Shared
+            </button>
+            <button
+              type="button"
+              className={yMode === "independent" ? "active" : ""}
+              onClick={() => setYMode("independent")}
+            >
+              Independent
+            </button>
+          </div>
         </div>
         <div className="actions">
           <button type="button" onClick={onCancel}>

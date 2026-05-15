@@ -13,6 +13,7 @@ interface Props {
   tick: number;
   paused: boolean;
   scrubTs: number | null;
+  keyframes: number[];
   xOverride: [number, number] | null;
   onRemove: () => void;
   onAddSeries: (path: string) => void;
@@ -22,6 +23,7 @@ interface Props {
   onStepBackward: () => void;
   onUpdate: (patch: Partial<PlotPanel>) => void;
   onMultiDrop: (paths: string[]) => void;
+  onPanByMs: (deltaMs: number) => void;
 }
 
 const COLORS = [
@@ -88,6 +90,7 @@ export function Plot({
   tick,
   paused,
   scrubTs,
+  keyframes,
   xOverride,
   onRemove,
   onAddSeries,
@@ -97,16 +100,18 @@ export function Plot({
   onStepBackward,
   onUpdate,
   onMultiDrop,
+  onPanByMs,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const uplotRef = useRef<uPlot | null>(null);
   const [over, setOver] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const dragModeRef = useRef<"scrub" | "pan" | null>(null);
+  const panLastXRef = useRef<number>(0);
 
   const yMode: "shared" | "independent" = plot.yMode ?? "shared";
 
-  // Build signature includes yMode so changes rebuild uPlot.
   const buildSig = useMemo(
     () => `${plot.series.join("|")}__${yMode}`,
     [plot.series, yMode],
@@ -124,7 +129,6 @@ export function Plot({
     return () => ro.disconnect();
   }, []);
 
-  // Build / rebuild uPlot whenever series or yMode changes.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -153,8 +157,6 @@ export function Plot({
       height: CANVAS_HEIGHT,
       pxAlign: false,
       cursor: {
-        // No crosshair, no hover dots — chips show values; scrub line is
-        // the sole position indicator when paused.
         show: false,
         drag: { x: false, y: false, setScale: false },
         sync: {
@@ -171,7 +173,6 @@ export function Plot({
           values: () => [],
           size: 4,
         },
-        // Y axis on the left only meaningful when shared.
         ...(isIndep
           ? []
           : [
@@ -249,12 +250,60 @@ export function Plot({
     return xVal * 1000;
   };
 
-  const onClick = (e: React.MouseEvent) => {
-    if (!paused) return;
-    const ts = posToTs(e.clientX);
-    if (ts !== null) onScrubTo(ts);
+  // --- pointer interactions: left=drag-scrub (paused), middle=drag-pan (always) ---
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button === 0 && paused) {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      dragModeRef.current = "scrub";
+      const ts = posToTs(e.clientX);
+      if (ts !== null) onScrubTo(ts);
+    } else if (e.button === 1) {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      dragModeRef.current = "pan";
+      panLastXRef.current = e.clientX;
+    }
   };
 
+  const onPointerMove = (e: React.PointerEvent) => {
+    const mode = dragModeRef.current;
+    if (mode === "scrub") {
+      const ts = posToTs(e.clientX);
+      if (ts !== null) onScrubTo(ts);
+    } else if (mode === "pan") {
+      const dx = e.clientX - panLastXRef.current;
+      panLastXRef.current = e.clientX;
+      const u = uplotRef.current;
+      if (!u || !width) return;
+      const sx = u.scales.x;
+      if (sx.min == null || sx.max == null) return;
+      const rangeMs = (sx.max - sx.min) * 1000;
+      const dtMs = (dx / width) * rangeMs;
+      // Drag right → view should follow content right → xMin decreases.
+      onPanByMs(-dtMs);
+    }
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (dragModeRef.current) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      dragModeRef.current = null;
+    }
+  };
+
+  // Suppress middle-click auto-scroll cursor and the contextmenu on right-
+  // click within the plot (we don't use right-click yet but it's confusing).
+  const onAuxClick = (e: React.MouseEvent) => {
+    if (e.button === 1) e.preventDefault();
+  };
+
+  // Wheel: when paused, step the scrub one sample per notch.
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -268,15 +317,27 @@ export function Plot({
     return () => el.removeEventListener("wheel", handler);
   }, [paused, onStepForward, onStepBackward]);
 
-  const scrubLeftPx = useMemo(() => {
-    if (!paused || scrubTs === null) return null;
+  // Compute pixel positions of scrub line and keyframe lines.
+  const pxFor = (tsMs: number): number | null => {
     const u = uplotRef.current;
     if (!u) return null;
-    const px = u.valToPos(scrubTs / 1000, "x", false);
+    const px = u.valToPos(tsMs / 1000, "x", false);
     if (px == null || !Number.isFinite(px) || px < 0) return null;
     return px;
+  };
+
+  const scrubLeftPx = useMemo(() => {
+    if (!paused || scrubTs === null) return null;
+    return pxFor(scrubTs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paused, scrubTs, xRange, tick, width]);
+
+  const keyframePx = useMemo(() => {
+    return keyframes
+      .map((kf) => ({ ts: kf, px: pxFor(kf) }))
+      .filter((k) => k.px !== null) as Array<{ ts: number; px: number }>;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyframes, xRange, tick, width]);
 
   const chipValue = (path: string): number | undefined => {
     const buf = buffers.get(path);
@@ -341,9 +402,18 @@ export function Plot({
           height: CANVAS_HEIGHT,
           width: "100%",
           overflow: "hidden",
-          cursor: paused ? "ew-resize" : "default",
+          cursor:
+            dragModeRef.current === "pan"
+              ? "grabbing"
+              : paused
+                ? "ew-resize"
+                : "default",
         }}
-        onClick={onClick}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onAuxClick={onAuxClick}
       >
         <div
           className="plot-canvas"
@@ -378,6 +448,21 @@ export function Plot({
             empty
           </div>
         )}
+        {keyframePx.map((k) => (
+          <div
+            key={k.ts}
+            className="keyframe-line"
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: k.px,
+              width: 0,
+              borderLeft: "1px dashed var(--warn)",
+              pointerEvents: "none",
+            }}
+          />
+        ))}
         {scrubLeftPx !== null && (
           <div
             className="scrub-line"
