@@ -270,6 +270,12 @@ export function Plot({
   // --- pointer interactions: left=drag-scrub (paused), middle=drag-pan (always) ---
 
   const onPointerDown = (e: React.PointerEvent) => {
+    // Don't intercept presses that started on interactive overlay
+    // children (gear / ×). Capturing the pointer here would redirect
+    // the mouseup away from the button and the click would never fire.
+    const target = e.target as HTMLElement;
+    if (target.closest(".plot-overlay-buttons")) return;
+
     if (e.button === 0 && paused) {
       e.preventDefault();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
