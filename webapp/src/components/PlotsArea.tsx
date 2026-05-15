@@ -27,6 +27,7 @@ interface Props {
   onUpdatePlot: (id: string, patch: Partial<PlotPanel>) => void;
   onAddSeries: (plotId: string, path: string) => void;
   onRemoveSeries: (plotId: string, path: string) => void;
+  onMultiDrop: (targetPlotId: string, paths: string[]) => void;
 }
 
 /** X-axis range in seconds (uPlot's time-scale unit). null means auto-fit. */
@@ -67,6 +68,7 @@ export function PlotsArea({
   onUpdatePlot,
   onAddSeries,
   onRemoveSeries,
+  onMultiDrop,
 }: Props) {
   const pathsByFull = useMemo(
     () => new Map(paths.map((p) => [p.fullPath, p])),
@@ -164,6 +166,7 @@ export function PlotsArea({
             onStepForward={onStepForward}
             onStepBackward={onStepBackward}
             onUpdate={(patch) => onUpdatePlot(plot.id, patch)}
+            onMultiDrop={(paths) => onMultiDrop(plot.id, paths)}
           />
         ))}
         {plots.length === 0 && (

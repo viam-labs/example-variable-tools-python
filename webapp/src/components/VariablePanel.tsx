@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import type { PathInfo, Scalar } from "../types";
 import { VariableRow } from "./VariableRow";
@@ -31,6 +31,49 @@ export function VariablePanel({
     [paths, lower],
   );
 
+  // Selection state for shift/ctrl multi-select.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const anchorRef = useRef<string | null>(null);
+
+  /** Linear order of currently-visible variable paths, computed in the same
+   * order TreeList renders them — required for shift+click range selection. */
+  const visibleOrder = useMemo(() => {
+    const out: string[] = [];
+    const filteredSet = new Set(filtered.map((p) => p.fullPath));
+    for (const [, sourcePaths] of pathsBySource.entries()) {
+      for (const p of sourcePaths) {
+        if (filteredSet.has(p.fullPath)) out.push(p.fullPath);
+      }
+    }
+    return out;
+  }, [filtered, pathsBySource]);
+
+  const handleSelect = useCallback(
+    (path: string, e: React.MouseEvent) => {
+      if (e.shiftKey && anchorRef.current) {
+        const i1 = visibleOrder.indexOf(anchorRef.current);
+        const i2 = visibleOrder.indexOf(path);
+        if (i1 >= 0 && i2 >= 0) {
+          const lo = Math.min(i1, i2);
+          const hi = Math.max(i1, i2);
+          setSelected(new Set(visibleOrder.slice(lo, hi + 1)));
+        }
+      } else if (e.metaKey || e.ctrlKey) {
+        setSelected((prev) => {
+          const next = new Set(prev);
+          if (next.has(path)) next.delete(path);
+          else next.add(path);
+          return next;
+        });
+        anchorRef.current = path;
+      } else {
+        setSelected(new Set([path]));
+        anchorRef.current = path;
+      }
+    },
+    [visibleOrder],
+  );
+
   return (
     <div className="panel-vars">
       <div className="search">
@@ -41,6 +84,14 @@ export function VariablePanel({
           onChange={(e) => onSearchChange(e.target.value)}
         />
       </div>
+      {selected.size > 1 && (
+        <div className="selection-hint">
+          {selected.size} selected — drag onto a plot to add all
+          <button className="ghost" onClick={() => setSelected(new Set())}>
+            clear
+          </button>
+        </div>
+      )}
       <div className="list">
         <TreeList
           paths={filtered}
@@ -49,6 +100,8 @@ export function VariablePanel({
           onExpandedChange={onTreeExpandedChange}
           latest={latest}
           filterActive={lower.length > 0}
+          selected={selected}
+          onSelect={handleSelect}
         />
       </div>
     </div>
@@ -120,6 +173,8 @@ function TreeList({
   onExpandedChange,
   latest,
   filterActive,
+  selected,
+  onSelect,
 }: {
   paths: PathInfo[];
   pathsBySource: Map<string, PathInfo[]>;
@@ -127,6 +182,8 @@ function TreeList({
   onExpandedChange: (s: Set<string>) => void;
   latest: Record<string, Scalar>;
   filterActive: boolean;
+  selected: Set<string>;
+  onSelect: (path: string, e: React.MouseEvent) => void;
 }) {
   const root = useMemo(
     () => buildTree(pathsBySource, paths),
@@ -167,6 +224,9 @@ function TreeList({
                 info={p}
                 label={p.meta.name}
                 liveValue={latest[p.fullPath]}
+                selected={selected.has(p.fullPath)}
+                onSelect={onSelect}
+                selectedPaths={selected}
               />
             ))}
           </div>

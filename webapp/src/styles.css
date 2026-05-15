@@ -160,6 +160,27 @@ select:focus {
   background: var(--panel-2);
   border-left-color: var(--accent);
 }
+.var-row.selected {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+.var-row.selected:hover {
+  background: var(--accent-soft);
+}
+
+.selection-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text);
+}
+.selection-hint button {
+  margin-left: auto;
+}
 .var-row .dot {
   font-size: 10px;
   color: var(--text-dim);

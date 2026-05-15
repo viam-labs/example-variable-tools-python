@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ConnectionBar } from "./components/ConnectionBar";
 import { ConnectionDialog } from "./components/ConnectionDialog";
+import { DropModeDialog } from "./components/DropModeDialog";
 import { PlotsArea } from "./components/PlotsArea";
 import { TunablesBar } from "./components/TunablesBar";
 import { VariablePanel } from "./components/VariablePanel";
@@ -93,6 +94,11 @@ export function App() {
   const [scrubTs, setScrubTs] = useState<number | null>(null);
   /** Saved keyframe timestamps (ms). Session-only. */
   const [keyframes, setKeyframes] = useState<number[]>([]);
+  /** Pending multi-drop awaiting user choice. */
+  const [pendingDrop, setPendingDrop] = useState<{
+    targetPlotId: string;
+    paths: string[];
+  } | null>(null);
 
   // Apply theme to document root.
   useEffect(() => {
@@ -368,6 +374,91 @@ export function App() {
     [],
   );
 
+  /** Handle a drop of multiple paths onto a plot. If only one plot exists,
+   * stack everything in there (no point asking). Otherwise, surface the
+   * spread-mode picker. */
+  const handleMultiDrop = useCallback(
+    (targetPlotId: string, paths: string[]) => {
+      if (plots.length <= 1 || paths.length <= 1) {
+        setPlots((ps) =>
+          ps.map((x) => {
+            if (x.id !== targetPlotId) return x;
+            const set = new Set(x.series);
+            for (const p of paths) set.add(p);
+            return { ...x, series: Array.from(set) };
+          }),
+        );
+        return;
+      }
+      setPendingDrop({ targetPlotId, paths });
+    },
+    [plots.length],
+  );
+
+  /** Apply a chosen spread mode to the pending drop, then dismiss. */
+  const applyDrop = useCallback(
+    (mode: "single" | "spread-h" | "spread-v") => {
+      if (!pendingDrop) return;
+      const { targetPlotId, paths } = pendingDrop;
+      const targetIdx = plots.findIndex((p) => p.id === targetPlotId);
+      if (targetIdx < 0) {
+        setPendingDrop(null);
+        return;
+      }
+
+      // Build the order in which we'll visit plots, starting from target.
+      let order: number[];
+      if (mode === "single") {
+        order = [targetIdx];
+      } else if (mode === "spread-h") {
+        // Row-major (the natural CSS-grid fill order).
+        order = plots.map((_, i) => i);
+      } else {
+        // Column-major reordering for spread-v.
+        const rows = Math.ceil(plots.length / columns);
+        const reorder: number[] = [];
+        for (let c = 0; c < columns; c++) {
+          for (let r = 0; r < rows; r++) {
+            const idx = r * columns + c;
+            if (idx < plots.length) reorder.push(idx);
+          }
+        }
+        order = reorder;
+      }
+
+      // Rotate so we start at target.
+      const targetPosInOrder = order.indexOf(targetIdx);
+      if (targetPosInOrder > 0) {
+        order = [
+          ...order.slice(targetPosInOrder),
+          ...order.slice(0, targetPosInOrder),
+        ];
+      }
+
+      // Distribute paths across order, wrapping if more paths than plots.
+      const perPlot = new Map<string, string[]>();
+      paths.forEach((path, i) => {
+        const plotIdx = order[i % order.length];
+        const id = plots[plotIdx].id;
+        const list = perPlot.get(id) ?? [];
+        list.push(path);
+        perPlot.set(id, list);
+      });
+
+      setPlots((ps) =>
+        ps.map((x) => {
+          const additions = perPlot.get(x.id);
+          if (!additions) return x;
+          const set = new Set(x.series);
+          for (const p of additions) set.add(p);
+          return { ...x, series: Array.from(set) };
+        }),
+      );
+      setPendingDrop(null);
+    },
+    [pendingDrop, plots, columns],
+  );
+
   /** Values shown in the sidebar: latest when playing, scrub-lookup when
    * paused. Tunables always show latest (the actual current value). */
   const displayValues = useMemo(() => {
@@ -471,6 +562,7 @@ export function App() {
           onUpdatePlot={updatePlot}
           onAddSeries={addSeries}
           onRemoveSeries={removeSeries}
+          onMultiDrop={handleMultiDrop}
         />
       </div>
       <TunablesBar
@@ -492,6 +584,15 @@ export function App() {
           errorMessage={
             status.state === "error" ? status.message : undefined
           }
+        />
+      )}
+      {pendingDrop && (
+        <DropModeDialog
+          pathCount={pendingDrop.paths.length}
+          plotCount={plots.length}
+          columns={columns}
+          onChoose={applyDrop}
+          onCancel={() => setPendingDrop(null)}
         />
       )}
     </div>

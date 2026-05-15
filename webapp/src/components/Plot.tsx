@@ -21,6 +21,7 @@ interface Props {
   onStepForward: () => void;
   onStepBackward: () => void;
   onUpdate: (patch: Partial<PlotPanel>) => void;
+  onMultiDrop: (paths: string[]) => void;
 }
 
 const COLORS = [
@@ -95,6 +96,7 @@ export function Plot({
   onStepForward,
   onStepBackward,
   onUpdate,
+  onMultiDrop,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -284,7 +286,10 @@ export function Plot({
   };
 
   const onDragOver = (e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes("text/vt-path")) {
+    if (
+      e.dataTransfer.types.includes("text/vt-path") ||
+      e.dataTransfer.types.includes("text/vt-paths")
+    ) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
       setOver(true);
@@ -292,9 +297,27 @@ export function Plot({
   };
   const onDragLeave = () => setOver(false);
   const onDrop = (e: React.DragEvent) => {
-    const path = e.dataTransfer.getData("text/vt-path");
     setOver(false);
-    if (path) onAddSeries(path);
+    let paths: string[] = [];
+    const arrStr = e.dataTransfer.getData("text/vt-paths");
+    if (arrStr) {
+      try {
+        const parsed = JSON.parse(arrStr);
+        if (Array.isArray(parsed)) paths = parsed.filter((p) => typeof p === "string");
+      } catch {
+        // fall through
+      }
+    }
+    if (paths.length === 0) {
+      const single = e.dataTransfer.getData("text/vt-path");
+      if (single) paths = [single];
+    }
+    if (paths.length === 0) return;
+    if (paths.length === 1) {
+      onAddSeries(paths[0]);
+    } else {
+      onMultiDrop(paths);
+    }
   };
 
   const startLabel = xRange ? timeLabel(xRange[0]) : "";
