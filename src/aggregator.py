@@ -192,6 +192,12 @@ class Aggregator(Sensor, EasyResource):
         if verb == "vt.schema_all":
             await self._refresh_schemas()
             return {"schemas": dict(self._schemas)}
+        if verb == "vt.dump":
+            # Delegate to the same fan-out used by get_readings, so the
+            # verb-based path works for clients that don't differentiate
+            # between aggregator and direct mode.
+            values = await self.get_readings()
+            return {"values": dict(values)}
         if verb == "vt.set":
             return await self._route_set(command)
         return {}

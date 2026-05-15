@@ -108,24 +108,21 @@ async function probeSchema(
   return { mode: "direct", schemas: direct, prefixWithSource: false };
 }
 
-/** Issue vt.dump and return a flat path → value map. For aggregator mode
- * the keys are already prefixed; for direct mode this prefixes them with
- * the resource name so the UI's PathInfo.fullPath matches. */
+/** Fetch current values via Sensor.getReadings — works uniformly for both
+ * aggregator (which fans out to deps in its get_readings) and direct sensor
+ * (whose get_readings returns its flat registry). For aggregator mode the
+ * keys are already prefixed; for direct mode we prefix them with the
+ * resource name so the UI's PathInfo.fullPath matches. */
 export async function dump(
   session: ConnectedSession,
 ): Promise<Record<string, Scalar>> {
-  const raw = await session.sensor.doCommand(
-    Struct.fromJson({ command: "vt.dump" }),
-  );
-  // Debug: log the raw response shape once per session change so we can
-  // see what the SDK actually unwraps. Remove after wire-format is verified.
-  // eslint-disable-next-line no-console
+  const raw = await session.sensor.getReadings();
   if (!_loggedDumpShape) {
-    console.log("[vt.dump raw response]", raw);
+    // eslint-disable-next-line no-console
+    console.log("[get_readings raw response]", raw);
     _loggedDumpShape = true;
   }
-  const resp = raw as unknown as Record<string, JsonValue>;
-  const values = (resp?.values ?? {}) as Record<string, Scalar>;
+  const values = (raw ?? {}) as Record<string, Scalar>;
   if (session.prefixWithSource) return values;
   const out: Record<string, Scalar> = {};
   for (const [k, v] of Object.entries(values)) {
