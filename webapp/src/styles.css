@@ -179,11 +179,16 @@ select:focus {
   text-transform: uppercase;
 }
 .var-row .live {
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 11px;
-  min-width: 60px;
+  min-width: 70px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.var-row .live.empty {
+  color: var(--text-dim);
+  font-weight: 400;
 }
 
 .tree-node {
@@ -241,6 +246,9 @@ select:focus {
   flex: 1;
   font-size: 12px;
   color: var(--text-dim);
+}
+.plot-header > * + * {
+  margin-left: 4px;
 }
 .plot-series {
   display: flex;

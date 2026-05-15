@@ -11,6 +11,10 @@ interface Props {
   onDisconnect: () => void;
   theme: "dark" | "light";
   onThemeToggle: () => void;
+  tickCount: number;
+  latestKeys: number;
+  pathCount: number;
+  lastDumpAt: number | null;
 }
 
 const RATES = [1, 2, 5, 10, 20, 30];
@@ -26,7 +30,12 @@ export function ConnectionBar({
   onDisconnect,
   theme,
   onThemeToggle,
+  tickCount,
+  latestKeys,
+  pathCount,
+  lastDumpAt,
 }: Props) {
+  const ageMs = lastDumpAt ? Date.now() - lastDumpAt : null;
   const dotClass =
     status.state === "connected"
       ? "connected"
@@ -55,6 +64,16 @@ export function ConnectionBar({
       {status.state === "error" && (
         <span className="crumb" style={{ color: "var(--danger)" }}>
           {status.message}
+        </span>
+      )}
+      {status.state === "connected" && (
+        <span className="crumb" title="polls / values returned / paths in schema / age of last dump">
+          polls: <b>{tickCount}</b> • values: <b>{latestKeys}/{pathCount}</b>
+          {ageMs !== null && (
+            <>
+              {" "}• last: <b>{ageMs < 1000 ? `${ageMs}ms` : `${(ageMs / 1000).toFixed(1)}s`}</b> ago
+            </>
+          )}
         </span>
       )}
       <span style={{ flex: 1 }} />

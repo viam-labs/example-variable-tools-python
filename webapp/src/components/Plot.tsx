@@ -172,6 +172,12 @@ export function Plot({
     if (path) onAddSeries(path);
   };
 
+  // Debug: aggregate buffer state for this plot's series.
+  const sampleCount = plot.series.reduce(
+    (acc, p) => acc + (buffers.get(p)?.length ?? 0),
+    0,
+  );
+
   return (
     <div
       className={`plot${over ? " over" : ""}`}
@@ -181,6 +187,11 @@ export function Plot({
     >
       <div className="plot-header">
         <span className="title">{plot.title || `Plot`}</span>
+        {plot.series.length > 0 && (
+          <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
+            {sampleCount} samples
+          </span>
+        )}
         <button className="danger" onClick={onRemove} title="Remove plot">
           ×
         </button>

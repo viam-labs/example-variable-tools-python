@@ -21,6 +21,10 @@ export class RingBuffer {
     if (this.size < this.capacity) this.size += 1;
   }
 
+  get length(): number {
+    return this.size;
+  }
+
   /** Returns [xs, ys] in chronological order. Allocates two new arrays — call
    * sparingly (uPlot setData is the primary consumer, runs ~10 Hz). */
   snapshot(): [number[], number[]] {

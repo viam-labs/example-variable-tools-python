@@ -84,6 +84,7 @@ export function App() {
 
   const [latest, setLatest] = useState<Record<string, Scalar>>({});
   const [tick, setTick] = useState(0); // bumped on each successful dump
+  const [lastDumpAt, setLastDumpAt] = useState<number | null>(null);
   const [setErrors, setSetErrors] = useState<Record<string, string>>({});
 
   const buffersRef = useRef<Map<string, RingBuffer>>(new Map());
@@ -162,6 +163,7 @@ export function App() {
         if (cancelled) return;
         const ts = Date.now();
         const bufs = buffersRef.current;
+        let nKeys = 0;
         for (const [k, v] of Object.entries(values)) {
           let buf = bufs.get(k);
           if (!buf) {
@@ -169,12 +171,23 @@ export function App() {
             bufs.set(k, buf);
           }
           buf.push(ts, scalarToNumber(v, metaByPath.get(k)));
+          nKeys += 1;
+        }
+        if (nKeys === 0) {
+          // Surface this as an error: connection works but vt.dump returned
+          // nothing — usually means we're talking to a non-vt resource or
+          // an aggregator with no live deps.
+          // eslint-disable-next-line no-console
+          console.warn("vt.dump returned 0 keys", values);
         }
         setLatest(values);
         setTick((t) => t + 1);
+        setLastDumpAt(ts);
+        if (status.state === "error") setStatus({ state: "connected" });
       } catch (err) {
-        // Soft-fail: keep loop alive on transient errors but surface status.
         const msg = err instanceof Error ? err.message : String(err);
+        // eslint-disable-next-line no-console
+        console.error("vt.dump failed", err);
         setStatus({ state: "error", message: msg });
       } finally {
         inFlight = false;
@@ -281,6 +294,10 @@ export function App() {
         onDisconnect={handleDisconnect}
         theme={theme}
         onThemeToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
+        tickCount={tick}
+        latestKeys={Object.keys(latest).length}
+        pathCount={session?.paths.length ?? 0}
+        lastDumpAt={lastDumpAt}
       />
       <div className="main">
         <VariablePanel

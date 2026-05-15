@@ -50,7 +50,7 @@ export function scalarToNumber(value: Scalar, meta?: VariableMeta): number {
 export function scalarToDisplay(value: Scalar, meta?: VariableMeta): string {
   if (typeof value === "number") {
     if (meta?.type === "integer") return String(Math.trunc(value));
-    return Number.isFinite(value) ? value.toFixed(3) : String(value);
+    return Number.isFinite(value) ? value.toFixed(2) : String(value);
   }
   if (typeof value === "boolean") return value ? "true" : "false";
   return String(value);

@@ -38,6 +38,7 @@ export interface ConnectedSession {
 export async function connect(
   cfg: ConnectionConfig,
 ): Promise<ConnectedSession> {
+  _loggedDumpShape = false;
   const creds: Credential = {
     type: "api-key",
     payload: cfg.apiKey,
@@ -113,9 +114,17 @@ async function probeSchema(
 export async function dump(
   session: ConnectedSession,
 ): Promise<Record<string, Scalar>> {
-  const resp = (await session.sensor.doCommand(
+  const raw = await session.sensor.doCommand(
     Struct.fromJson({ command: "vt.dump" }),
-  )) as Record<string, JsonValue>;
+  );
+  // Debug: log the raw response shape once per session change so we can
+  // see what the SDK actually unwraps. Remove after wire-format is verified.
+  // eslint-disable-next-line no-console
+  if (!_loggedDumpShape) {
+    console.log("[vt.dump raw response]", raw);
+    _loggedDumpShape = true;
+  }
+  const resp = raw as unknown as Record<string, JsonValue>;
   const values = (resp?.values ?? {}) as Record<string, Scalar>;
   if (session.prefixWithSource) return values;
   const out: Record<string, Scalar> = {};
@@ -124,6 +133,8 @@ export async function dump(
   }
   return out;
 }
+
+let _loggedDumpShape = false;
 
 /** Issue vt.set. For aggregator mode the full path is sent through; for
  * direct mode we strip the resource prefix. */

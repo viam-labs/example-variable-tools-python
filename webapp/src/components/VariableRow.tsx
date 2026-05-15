@@ -26,7 +26,7 @@ export function VariableRow({ info, label, liveValue }: Props) {
       </span>
       <span className="name">{label}</span>
       <span className="type">{info.meta.type}</span>
-      <span className="live">
+      <span className={`live${liveValue === undefined ? " empty" : ""}`}>
         {liveValue !== undefined ? scalarToDisplay(liveValue, info.meta) : "—"}
       </span>
     </div>
