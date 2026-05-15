@@ -261,7 +261,7 @@ select:focus {
 .plot-series .chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 11px;
@@ -272,6 +272,17 @@ select:focus {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  flex-shrink: 0;
+}
+.plot-series .chip .chip-path {
+  color: var(--text);
+}
+.plot-series .chip .chip-value {
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
 }
 .plot-series .chip .rm {
   cursor: pointer;
@@ -279,6 +290,9 @@ select:focus {
   margin-left: 2px;
 }
 .plot-series .chip .rm:hover { color: var(--danger); }
+.plot.paused .plot-canvas-wrap {
+  box-shadow: inset 0 0 0 1px var(--warn);
+}
 .plot-canvas {
   padding: 6px;
   position: relative;

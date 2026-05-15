@@ -3,12 +3,16 @@ import uPlot from "uplot";
 
 import type { PathInfo, PlotPanel } from "../types";
 import type { RingBuffer } from "../lib/ringbuffer";
+import { scalarToDisplay } from "../lib/schema";
 
 interface Props {
   plot: PlotPanel;
   buffers: Map<string, RingBuffer>;
   pathsByFull: Map<string, PathInfo>;
   tick: number;
+  paused: boolean;
+  cursorTs: number | null;
+  onCursorTsChange: (ts: number | null) => void;
   onRemove: () => void;
   onAddSeries: (path: string) => void;
   onRemoveSeries: (path: string) => void;
@@ -26,6 +30,7 @@ const COLORS = [
 ];
 
 const CANVAS_HEIGHT = 220;
+const CURSOR_SYNC_KEY = "vt-scope";
 
 function tsLabel(secs: number): string {
   const d = new Date(secs * 1000);
@@ -33,9 +38,10 @@ function tsLabel(secs: number): string {
 }
 
 /** Build an uPlot AlignedData from a set of (xs, ys) snapshots, aligning
- * onto a unified x axis (the union of all timestamps). For each series,
- * the value at a given x is the most recent sample at-or-before x. */
-function alignData(snapshots: Array<[number[], number[]] | undefined>): uPlot.AlignedData {
+ * onto a unified x axis. */
+function alignData(
+  snapshots: Array<[number[], number[]] | undefined>,
+): uPlot.AlignedData {
   const xSet = new Set<number>();
   for (const s of snapshots) {
     if (!s) continue;
@@ -70,6 +76,9 @@ export function Plot({
   buffers,
   pathsByFull,
   tick,
+  paused,
+  cursorTs,
+  onCursorTsChange,
   onRemove,
   onAddSeries,
   onRemoveSeries,
@@ -91,9 +100,7 @@ export function Plot({
     return () => ro.disconnect();
   }, []);
 
-  // Build / rebuild uPlot whenever the series list changes. Immediately
-  // populate from current buffer state so the user doesn't have to wait
-  // for the next poll tick to see anything.
+  // Build / rebuild uPlot whenever the series list changes.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -110,7 +117,14 @@ export function Plot({
       width,
       height: CANVAS_HEIGHT,
       pxAlign: false,
-      cursor: { drag: { x: true, y: false }, points: { show: true } },
+      cursor: {
+        drag: { x: true, y: false, setScale: true },
+        points: { show: true },
+        sync: {
+          key: CURSOR_SYNC_KEY,
+          scales: ["x", null],
+        },
+      },
       scales: {
         x: { time: true },
         y: { auto: true },
@@ -137,9 +151,28 @@ export function Plot({
           spanGaps: true,
         })),
       ],
+      hooks: {
+        setCursor: [
+          (u) => {
+            const left = u.cursor.left;
+            if (left == null || left < 0) {
+              onCursorTsChange(null);
+              return;
+            }
+            const xVal = u.posToVal(left, "x");
+            if (xVal != null && Number.isFinite(xVal)) {
+              onCursorTsChange(xVal * 1000);
+            } else {
+              onCursorTsChange(null);
+            }
+          },
+        ],
+      },
     };
 
-    const initial = alignData(plot.series.map((p) => buffers.get(p)?.snapshot()));
+    const initial = alignData(
+      plot.series.map((p) => buffers.get(p)?.snapshot()),
+    );
     const u = new uPlot(opts, initial, el);
     uplotRef.current = u;
 
@@ -172,7 +205,21 @@ export function Plot({
     if (path) onAddSeries(path);
   };
 
-  // Debug: aggregate buffer state for this plot's series.
+  const resetZoom = () => {
+    const u = uplotRef.current;
+    if (!u) return;
+    u.setScale("x", { min: null as unknown as number, max: null as unknown as number });
+    u.setScale("y", { min: null as unknown as number, max: null as unknown as number });
+  };
+
+  // Compute current chip values: at cursor when scrubbing, latest otherwise.
+  const chipValue = (path: string): number | undefined => {
+    const buf = buffers.get(path);
+    if (!buf) return undefined;
+    if (cursorTs !== null) return buf.valueAt(cursorTs);
+    return buf.last()?.value;
+  };
+
   const sampleCount = plot.series.reduce(
     (acc, p) => acc + (buffers.get(p)?.length ?? 0),
     0,
@@ -180,7 +227,7 @@ export function Plot({
 
   return (
     <div
-      className={`plot${over ? " over" : ""}`}
+      className={`plot${over ? " over" : ""}${paused ? " paused" : ""}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -192,6 +239,13 @@ export function Plot({
             {sampleCount} samples
           </span>
         )}
+        <button
+          onClick={resetZoom}
+          title="Reset zoom (or double-click the plot)"
+          disabled={plot.series.length === 0}
+        >
+          ⟲ zoom
+        </button>
         <button className="danger" onClick={onRemove} title="Remove plot">
           ×
         </button>
@@ -204,19 +258,31 @@ export function Plot({
         )}
         {plot.series.map((path, i) => {
           const info = pathsByFull.get(path);
+          const v = chipValue(path);
+          const display =
+            v === undefined
+              ? "—"
+              : Number.isFinite(v)
+                ? scalarToDisplay(v, info?.meta)
+                : "—";
           return (
             <span className="chip" key={path}>
               <span
                 className="swatch"
                 style={{ background: COLORS[i % COLORS.length] }}
               />
-              <span>{path}</span>
+              <span className="chip-path">{path}</span>
+              <span className="chip-value">{display}</span>
               {info?.meta.units && (
                 <span style={{ color: "var(--text-dim)", fontSize: 10 }}>
                   {info.meta.units}
                 </span>
               )}
-              <span className="rm" onClick={() => onRemoveSeries(path)} title="Remove">
+              <span
+                className="rm"
+                onClick={() => onRemoveSeries(path)}
+                title="Remove"
+              >
                 ×
               </span>
             </span>
@@ -225,10 +291,14 @@ export function Plot({
       </div>
       <div
         className="plot-canvas-wrap"
-        style={{ position: "relative", height: CANVAS_HEIGHT, width: "100%", overflow: "hidden" }}
+        style={{
+          position: "relative",
+          height: CANVAS_HEIGHT,
+          width: "100%",
+          overflow: "hidden",
+        }}
       >
-        {/* uPlot owns this div — it must have no React-managed children, or
-            React will remove uPlot's canvas elements on re-renders. */}
+        {/* uPlot owns this div — it must have no React-managed children. */}
         <div
           className="plot-canvas"
           ref={containerRef}

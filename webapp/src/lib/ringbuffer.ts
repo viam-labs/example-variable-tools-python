@@ -1,53 +1,79 @@
-/** Fixed-capacity ring buffer of (timestamp_ms, value) samples. Two parallel
- * arrays are exposed so uPlot can read them as typed-array-like sequences
- * without a copy. */
-export class RingBuffer {
-  readonly capacity: number;
-  private xs: Float64Array;
-  private ys: Float64Array;
-  private head = 0; // next write index
-  private size = 0;
+/** Time-windowed (timestamp_ms, value) buffer.
+ *
+ * Stores samples and prunes anything older than ``windowMs`` from the most
+ * recent sample's timestamp on every push. Two parallel arrays are used so
+ * snapshot is a cheap slice. Suitable for the polling rates this app sees
+ * (1-30 Hz × tens of buffers); array shifts are O(n) but n is bounded by
+ * windowMs × pollRate which is tiny in practice.
+ */
+export class TimeWindowBuffer {
+  private xs: number[] = [];
+  private ys: number[] = [];
+  private windowMs: number;
 
-  constructor(capacity = 2000) {
-    this.capacity = capacity;
-    this.xs = new Float64Array(capacity);
-    this.ys = new Float64Array(capacity);
+  constructor(windowMs: number) {
+    this.windowMs = windowMs;
+  }
+
+  setWindow(windowMs: number): void {
+    this.windowMs = windowMs;
+    this._prune();
   }
 
   push(ts: number, value: number): void {
-    this.xs[this.head] = ts;
-    this.ys[this.head] = value;
-    this.head = (this.head + 1) % this.capacity;
-    if (this.size < this.capacity) this.size += 1;
+    this.xs.push(ts);
+    this.ys.push(value);
+    this._prune();
+  }
+
+  private _prune(): void {
+    if (this.xs.length === 0) return;
+    const cutoff = this.xs[this.xs.length - 1] - this.windowMs;
+    let i = 0;
+    while (i < this.xs.length && this.xs[i] < cutoff) i += 1;
+    if (i > 0) {
+      this.xs = this.xs.slice(i);
+      this.ys = this.ys.slice(i);
+    }
+  }
+
+  /** [xs, ys] snapshot copies. */
+  snapshot(): [number[], number[]] {
+    return [this.xs.slice(), this.ys.slice()];
   }
 
   get length(): number {
-    return this.size;
+    return this.xs.length;
   }
 
-  /** Returns [xs, ys] in chronological order. Allocates two new arrays — call
-   * sparingly (uPlot setData is the primary consumer, runs ~10 Hz). */
-  snapshot(): [number[], number[]] {
-    const xs: number[] = new Array(this.size);
-    const ys: number[] = new Array(this.size);
-    const start = this.size < this.capacity ? 0 : this.head;
-    for (let i = 0; i < this.size; i++) {
-      const j = (start + i) % this.capacity;
-      xs[i] = this.xs[j];
-      ys[i] = this.ys[j];
-    }
-    return [xs, ys];
-  }
-
-  /** Most recent sample, or undefined if empty. */
   last(): { ts: number; value: number } | undefined {
-    if (this.size === 0) return undefined;
-    const idx = (this.head - 1 + this.capacity) % this.capacity;
-    return { ts: this.xs[idx], value: this.ys[idx] };
+    if (this.xs.length === 0) return undefined;
+    const i = this.xs.length - 1;
+    return { ts: this.xs[i], value: this.ys[i] };
+  }
+
+  /** Most recent sample at or before ``ts``, or undefined if none. Binary
+   * search; O(log n). */
+  valueAt(ts: number): number | undefined {
+    if (this.xs.length === 0) return undefined;
+    if (this.xs[0] > ts) return undefined;
+    let lo = 0;
+    let hi = this.xs.length - 1;
+    if (this.xs[hi] <= ts) return this.ys[hi];
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (this.xs[mid] <= ts) lo = mid;
+      else hi = mid - 1;
+    }
+    return this.ys[lo];
   }
 
   clear(): void {
-    this.head = 0;
-    this.size = 0;
+    this.xs = [];
+    this.ys = [];
   }
 }
+
+/** Backward-compat alias — older imports of `RingBuffer` continue to work. */
+export const RingBuffer = TimeWindowBuffer;
+export type RingBuffer = TimeWindowBuffer;

@@ -15,9 +15,20 @@ interface Props {
   latestKeys: number;
   pathCount: number;
   lastDumpAt: number | null;
+  paused: boolean;
+  onPauseToggle: () => void;
+  windowSec: number;
+  onWindowSecChange: (sec: number) => void;
 }
 
 const RATES = [1, 2, 5, 10, 20, 30];
+const WINDOWS = [
+  { sec: 10, label: "10s" },
+  { sec: 30, label: "30s" },
+  { sec: 60, label: "1min" },
+  { sec: 300, label: "5min" },
+  { sec: 900, label: "15min" },
+];
 
 export function ConnectionBar({
   status,
@@ -34,6 +45,10 @@ export function ConnectionBar({
   latestKeys,
   pathCount,
   lastDumpAt,
+  paused,
+  onPauseToggle,
+  windowSec,
+  onWindowSecChange,
 }: Props) {
   const ageMs = lastDumpAt ? Date.now() - lastDumpAt : null;
   const dotClass =
@@ -76,7 +91,29 @@ export function ConnectionBar({
           )}
         </span>
       )}
+      {paused && (
+        <span
+          className="crumb"
+          style={{ color: "var(--warn)", fontWeight: 600 }}
+        >
+          ⏸ PAUSED
+        </span>
+      )}
       <span style={{ flex: 1 }} />
+      <label className="crumb">
+        Window:&nbsp;
+        <select
+          value={windowSec}
+          onChange={(e) => onWindowSecChange(Number(e.target.value))}
+          title="How much history to keep in each variable's buffer"
+        >
+          {WINDOWS.map((w) => (
+            <option key={w.sec} value={w.sec}>
+              {w.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="crumb">
         Poll:&nbsp;
         <select
@@ -90,7 +127,17 @@ export function ConnectionBar({
           ))}
         </select>
       </label>
-      <button onClick={onThemeToggle} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
+      <button
+        onClick={onPauseToggle}
+        title={paused ? "Resume polling (R)" : "Pause polling (Space)"}
+        className={paused ? "primary" : ""}
+      >
+        {paused ? "▶ Resume" : "⏸ Pause"}
+      </button>
+      <button
+        onClick={onThemeToggle}
+        title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+      >
         {theme === "dark" ? "☀" : "☾"}
       </button>
       <button onClick={onEditConnection}>Connection…</button>

@@ -71,4 +71,5 @@ export interface PersistedLayout {
   treeExpanded: string[];
   pollRateHz: number;
   theme: "dark" | "light";
+  windowSec: number;
 }

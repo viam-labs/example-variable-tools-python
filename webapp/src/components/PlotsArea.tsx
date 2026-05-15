@@ -9,6 +9,9 @@ interface Props {
   buffers: Map<string, RingBuffer>;
   paths: PathInfo[];
   tick: number;
+  paused: boolean;
+  cursorTs: number | null;
+  onCursorTsChange: (ts: number | null) => void;
   onAddPlot: () => void;
   onRemovePlot: (id: string) => void;
   onAddSeries: (plotId: string, path: string) => void;
@@ -20,6 +23,9 @@ export function PlotsArea({
   buffers,
   paths,
   tick,
+  paused,
+  cursorTs,
+  onCursorTsChange,
   onAddPlot,
   onRemovePlot,
   onAddSeries,
@@ -39,6 +45,9 @@ export function PlotsArea({
           buffers={buffers}
           pathsByFull={pathsByFull}
           tick={tick}
+          paused={paused}
+          cursorTs={cursorTs}
+          onCursorTsChange={onCursorTsChange}
           onRemove={() => onRemovePlot(plot.id)}
           onAddSeries={(p) => onAddSeries(plot.id, p)}
           onRemoveSeries={(p) => onRemoveSeries(plot.id, p)}

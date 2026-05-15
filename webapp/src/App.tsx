@@ -24,7 +24,7 @@ import {
 } from "./viam-client";
 
 const LS_KEY = "variable-tools-scope:layout";
-const BUFFER_CAPACITY = 4000; // ~3.3 min at 20 Hz
+const DEFAULT_WINDOW_SEC = 30;
 
 function loadLayout(): PersistedLayout {
   try {
@@ -37,9 +37,16 @@ function loadLayout(): PersistedLayout {
       pollRateHz: parsed.pollRateHz ?? 10,
       connection: parsed.connection,
       theme: parsed.theme ?? "dark",
+      windowSec: parsed.windowSec ?? DEFAULT_WINDOW_SEC,
     };
   } catch {
-    return { plots: [], treeExpanded: [], pollRateHz: 10, theme: "dark" };
+    return {
+      plots: [],
+      treeExpanded: [],
+      pollRateHz: 10,
+      theme: "dark",
+      windowSec: DEFAULT_WINDOW_SEC,
+    };
   }
 }
 
@@ -76,6 +83,9 @@ export function App() {
   const [pollRateHz, setPollRateHz] = useState<number>(initial.pollRateHz);
   const [plots, setPlots] = useState<PlotPanel[]>(initial.plots);
   const [theme, setTheme] = useState<"dark" | "light">(initial.theme);
+  const [windowSec, setWindowSec] = useState<number>(initial.windowSec);
+  const [paused, setPaused] = useState<boolean>(false);
+  const [cursorTs, setCursorTs] = useState<number | null>(null);
 
   // Apply theme to document root.
   useEffect(() => {
@@ -97,41 +107,55 @@ export function App() {
       treeExpanded: Array.from(treeExpanded),
       pollRateHz,
       theme,
+      windowSec,
     });
-  }, [connection, plots, treeExpanded, pollRateHz, theme]);
+  }, [connection, plots, treeExpanded, pollRateHz, theme, windowSec]);
+
+  // Apply window changes to all existing buffers.
+  useEffect(() => {
+    for (const buf of buffersRef.current.values()) {
+      buf.setWindow(windowSec * 1000);
+    }
+  }, [windowSec]);
 
   // Manage ring buffers: create on first sight of a path, never delete (they
   // hold history that may still be referenced by plot series).
-  const ensureBuffers = useCallback((paths: PathInfo[]) => {
-    const bufs = buffersRef.current;
-    for (const p of paths) {
-      if (!bufs.has(p.fullPath)) {
-        bufs.set(p.fullPath, new RingBuffer(BUFFER_CAPACITY));
+  const ensureBuffers = useCallback(
+    (paths: PathInfo[]) => {
+      const bufs = buffersRef.current;
+      for (const p of paths) {
+        if (!bufs.has(p.fullPath)) {
+          bufs.set(p.fullPath, new RingBuffer(windowSec * 1000));
+        }
       }
-    }
-  }, []);
+    },
+    [windowSec],
+  );
 
   // Connection lifecycle.
-  const handleConnect = useCallback(async (cfg: ConnectionConfig) => {
-    setStatus({ state: "connecting" });
-    setConnection(cfg);
-    setShowDialog(false);
-    try {
-      const sess = await connect(cfg);
-      buffersRef.current.clear();
-      for (const p of sess.paths) {
-        buffersRef.current.set(p.fullPath, new RingBuffer(BUFFER_CAPACITY));
+  const handleConnect = useCallback(
+    async (cfg: ConnectionConfig) => {
+      setStatus({ state: "connecting" });
+      setConnection(cfg);
+      setShowDialog(false);
+      try {
+        const sess = await connect(cfg);
+        buffersRef.current.clear();
+        for (const p of sess.paths) {
+          buffersRef.current.set(p.fullPath, new RingBuffer(windowSec * 1000));
+        }
+        setSession(sess);
+        setStatus({ state: "connected" });
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : String(err ?? "unknown error");
+        setStatus({ state: "error", message });
+        setSession(null);
+        setShowDialog(true);
       }
-      setSession(sess);
-      setStatus({ state: "connected" });
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : String(err ?? "unknown error");
-      setStatus({ state: "error", message });
-      setSession(null);
-      setShowDialog(true);
-    }
-  }, []);
+    },
+    [windowSec],
+  );
 
   const handleDisconnect = useCallback(() => {
     disconnect(session);
@@ -147,9 +171,9 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Polling loop. Restarts when session or rate changes.
+  // Polling loop. Restarts when session or rate changes. Skips when paused.
   useEffect(() => {
-    if (!session) return;
+    if (!session || paused) return;
     let cancelled = false;
     let inFlight = false;
     const intervalMs = Math.max(20, Math.round(1000 / pollRateHz));
@@ -167,18 +191,15 @@ export function App() {
         for (const [k, v] of Object.entries(values)) {
           let buf = bufs.get(k);
           if (!buf) {
-            buf = new RingBuffer(BUFFER_CAPACITY);
+            buf = new RingBuffer(windowSec * 1000);
             bufs.set(k, buf);
           }
           buf.push(ts, scalarToNumber(v, metaByPath.get(k)));
           nKeys += 1;
         }
         if (nKeys === 0) {
-          // Surface this as an error: connection works but vt.dump returned
-          // nothing — usually means we're talking to a non-vt resource or
-          // an aggregator with no live deps.
           // eslint-disable-next-line no-console
-          console.warn("vt.dump returned 0 keys", values);
+          console.warn("get_readings returned 0 keys", values);
         }
         setLatest(values);
         setTick((t) => t + 1);
@@ -187,7 +208,7 @@ export function App() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         // eslint-disable-next-line no-console
-        console.error("vt.dump failed", err);
+        console.error("get_readings failed", err);
         setStatus({ state: "error", message: msg });
       } finally {
         inFlight = false;
@@ -200,7 +221,7 @@ export function App() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [session, pollRateHz]);
+  }, [session, pollRateHz, paused, windowSec, status.state]);
 
   // Variable-panel data.
   const pathsBySource = useMemo(() => {
@@ -298,6 +319,13 @@ export function App() {
         latestKeys={Object.keys(latest).length}
         pathCount={session?.paths.length ?? 0}
         lastDumpAt={lastDumpAt}
+        paused={paused}
+        onPauseToggle={() => {
+          setPaused((p) => !p);
+          if (paused) setCursorTs(null); // resume → drop scrub cursor
+        }}
+        windowSec={windowSec}
+        onWindowSecChange={setWindowSec}
       />
       <div className="main">
         <VariablePanel
@@ -314,6 +342,9 @@ export function App() {
           buffers={buffersRef.current}
           paths={session?.paths ?? []}
           tick={tick}
+          paused={paused}
+          cursorTs={cursorTs}
+          onCursorTsChange={setCursorTs}
           onAddPlot={addPlot}
           onRemovePlot={removePlot}
           onAddSeries={addSeries}
