@@ -310,22 +310,6 @@ export function Plot({
       onDrop={onDrop}
       onDoubleClick={() => setShowSettings(true)}
     >
-      <div className="plot-header">
-        <span className="title">{plot.title ?? ""}</span>
-        <button
-          className="ghost"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowSettings(true);
-          }}
-          title="Plot settings (or double-click the plot)"
-        >
-          ⚙
-        </button>
-        <button className="ghost" onClick={onRemove} title="Remove plot">
-          ×
-        </button>
-      </div>
       <div
         className="plot-canvas-wrap"
         ref={wrapRef}
@@ -343,6 +327,29 @@ export function Plot({
           ref={containerRef}
           style={{ height: "100%", width: "100%" }}
         />
+        {plot.title && <div className="plot-title-overlay">{plot.title}</div>}
+        <div className="plot-overlay-buttons">
+          <button
+            className="ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowSettings(true);
+            }}
+            title="Plot settings (or double-click the plot)"
+          >
+            ⚙
+          </button>
+          <button
+            className="ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            title="Remove plot"
+          >
+            ×
+          </button>
+        </div>
         {plot.series.length === 0 && (
           <div className="empty" style={{ position: "absolute", inset: 0 }}>
             empty

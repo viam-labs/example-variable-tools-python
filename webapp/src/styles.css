@@ -263,28 +263,51 @@ select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
-.plot-header {
+.plot-overlay-buttons {
+  position: absolute;
+  top: 2px;
+  right: 2px;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-bottom: 1px solid var(--border);
+  gap: 0;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.12s;
 }
-.plot-header .title {
-  flex: 1;
+.plot:hover .plot-overlay-buttons,
+.plot.over .plot-overlay-buttons {
+  opacity: 1;
+}
+.plot-overlay-buttons button {
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+.plot-overlay-buttons button:hover {
+  background: var(--panel-2);
+}
+.plot-title-overlay {
+  position: absolute;
+  top: 2px;
+  left: 6px;
   font-size: 11px;
   color: var(--text-dim);
+  z-index: 2;
+  pointer-events: none;
+  background: var(--panel);
+  padding: 0 4px;
+  border-radius: 2px;
 }
 button.ghost {
   background: transparent;
   border: none;
   color: var(--text-dim);
-  font-size: 14px;
-  padding: 0 4px;
+  font-size: 12px;
+  padding: 1px 5px;
   line-height: 1;
+  border-radius: 3px;
 }
 button.ghost:hover {
-  color: var(--danger);
+  color: var(--text);
+  background: var(--panel-2);
 }
 .plot-series {
   display: flex;
