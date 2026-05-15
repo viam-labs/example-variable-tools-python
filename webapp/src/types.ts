@@ -78,4 +78,5 @@ export interface PersistedLayout {
   windowSec: number;
   columns: number;
   sidebarWidth: number;
+  pinnedTunables: string[];
 }

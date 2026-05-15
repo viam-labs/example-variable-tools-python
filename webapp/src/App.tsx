@@ -45,6 +45,7 @@ function loadLayout(): PersistedLayout {
       windowSec: parsed.windowSec ?? DEFAULT_WINDOW_SEC,
       columns: parsed.columns ?? DEFAULT_COLUMNS,
       sidebarWidth: parsed.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH,
+      pinnedTunables: parsed.pinnedTunables ?? [],
     };
   } catch {
     return {
@@ -55,6 +56,7 @@ function loadLayout(): PersistedLayout {
       windowSec: DEFAULT_WINDOW_SEC,
       columns: DEFAULT_COLUMNS,
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+      pinnedTunables: [],
     };
   }
 }
@@ -95,6 +97,9 @@ export function App() {
   const [windowSec, setWindowSec] = useState<number>(initial.windowSec);
   const [columns, setColumns] = useState<number>(initial.columns);
   const [sidebarWidth, setSidebarWidth] = useState<number>(initial.sidebarWidth);
+  const [pinnedTunables, setPinnedTunables] = useState<string[]>(
+    initial.pinnedTunables,
+  );
   const [paused, setPaused] = useState<boolean>(false);
   /** Persistent scrub-point timestamp (ms). Only meaningful when paused. */
   const [scrubTs, setScrubTs] = useState<number | null>(null);
@@ -133,8 +138,16 @@ export function App() {
       windowSec,
       columns,
       sidebarWidth,
+      pinnedTunables,
     });
-  }, [connection, plots, treeExpanded, pollRateHz, theme, windowSec, columns, sidebarWidth]);
+  }, [connection, plots, treeExpanded, pollRateHz, theme, windowSec, columns, sidebarWidth, pinnedTunables]);
+
+  const pinTunable = useCallback((path: string) => {
+    setPinnedTunables((cur) => (cur.includes(path) ? cur : [...cur, path]));
+  }, []);
+  const unpinTunable = useCallback((path: string) => {
+    setPinnedTunables((cur) => cur.filter((p) => p !== path));
+  }, []);
 
   // Apply window changes to all existing buffers.
   useEffect(() => {
@@ -670,10 +683,13 @@ export function App() {
         />
       </div>
       <TunablesBar
-        tunables={tunables}
+        allTunables={tunables}
+        pinned={pinnedTunables}
         latest={latest}
         errors={setErrors}
         onSet={handleSet}
+        onAdd={pinTunable}
+        onRemove={unpinTunable}
         disabled={!session}
       />
       {showDialog && (

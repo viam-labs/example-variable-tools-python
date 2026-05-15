@@ -429,6 +429,24 @@ button.ghost:hover {
   border-top: 1px solid var(--border);
   padding: 8px 12px;
   overflow-x: auto;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.tunables.over {
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.tunables-empty {
+  padding: 6px 4px;
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 11px;
+}
+.pinned-tunable {
+  display: inline-flex;
+  align-items: center;
+}
+.pinned-tunable .ghost {
+  margin-left: 2px;
 }
 .tunables h4 {
   margin: 0 0 6px 0;
