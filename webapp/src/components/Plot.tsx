@@ -4,6 +4,7 @@ import uPlot from "uplot";
 import type { PathInfo, PlotPanel } from "../types";
 import type { RingBuffer } from "../lib/ringbuffer";
 import { scalarToDisplay } from "../lib/schema";
+import { PlotSettingsDialog } from "./PlotSettingsDialog";
 
 interface Props {
   plot: PlotPanel;
@@ -19,6 +20,7 @@ interface Props {
   onScrubTo: (ts: number) => void;
   onStepForward: () => void;
   onStepBackward: () => void;
+  onUpdate: (patch: Partial<PlotPanel>) => void;
 }
 
 const COLORS = [
@@ -34,8 +36,8 @@ const COLORS = [
 
 const CANVAS_HEIGHT = 160;
 const CURSOR_SYNC_KEY = "vt-scope";
+const CHIP_PRECISION = 4;
 
-/** ms-precision time label like "14:59:25.123". */
 function timeLabel(secs: number): string {
   if (!Number.isFinite(secs)) return "";
   const d = new Date(secs * 1000);
@@ -46,7 +48,6 @@ function timeLabel(secs: number): string {
   return `${hh}:${mm}:${ss}.${ms}`;
 }
 
-/** Build an aligned uPlot data set across multiple buffers via union of x. */
 function alignData(
   snapshots: Array<[number[], number[]] | undefined>,
 ): uPlot.AlignedData {
@@ -93,18 +94,24 @@ export function Plot({
   onScrubTo,
   onStepForward,
   onStepBackward,
+  onUpdate,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const uplotRef = useRef<uPlot | null>(null);
   const [over, setOver] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
-  const seriesSig = useMemo(() => plot.series.join("|"), [plot.series]);
+  const yMode: "shared" | "independent" = plot.yMode ?? "shared";
 
-  // Track current x scale for our time-corner labels and scrub-line position.
+  // Build signature includes yMode so changes rebuild uPlot.
+  const buildSig = useMemo(
+    () => `${plot.series.join("|")}__${yMode}`,
+    [plot.series, yMode],
+  );
+
   const [xRange, setXRange] = useState<[number, number] | null>(null);
 
-  // Width tracking for responsive plot.
   const [width, setWidth] = useState(0);
   useEffect(() => {
     const el = containerRef.current;
@@ -115,7 +122,7 @@ export function Plot({
     return () => ro.disconnect();
   }, []);
 
-  // Build / rebuild uPlot whenever the series list changes.
+  // Build / rebuild uPlot whenever series or yMode changes.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -128,39 +135,51 @@ export function Plot({
     const grid = getCssVar("--border") || "#30363d";
     const stroke = getCssVar("--text-dim") || "#8b949e";
 
+    const isIndep = yMode === "independent";
+
+    const scales: uPlot.Options["scales"] = { x: { time: true } };
+    if (isIndep) {
+      plot.series.forEach((_p, i) => {
+        scales[`y${i}`] = { auto: true };
+      });
+    } else {
+      scales.y = { auto: true };
+    }
+
     const opts: uPlot.Options = {
       width,
       height: CANVAS_HEIGHT,
       pxAlign: false,
       cursor: {
-        // No drag-to-zoom — zoom is via toolbar buttons. Keep crosshair sync.
+        // No crosshair, no hover dots — chips show values; scrub line is
+        // the sole position indicator when paused.
+        show: false,
         drag: { x: false, y: false, setScale: false },
-        points: { show: true, size: 5 },
         sync: {
           key: CURSOR_SYNC_KEY,
           scales: ["x", null],
         },
       },
-      scales: {
-        x: { time: true },
-        y: { auto: true },
-      },
+      scales,
       axes: [
         {
           stroke,
           grid: { stroke: grid, width: 0.5 },
           ticks: { stroke: grid, width: 0.5 },
-          // Suppress per-tick labels — we render only start/end in the
-          // bottom corners as overlays. Tick lines stay visible.
           values: () => [],
           size: 4,
         },
-        {
-          stroke,
-          grid: { stroke: grid, width: 0.5 },
-          ticks: { stroke: grid, width: 0.5 },
-          size: 38,
-        },
+        // Y axis on the left only meaningful when shared.
+        ...(isIndep
+          ? []
+          : [
+              {
+                stroke,
+                grid: { stroke: grid, width: 0.5 },
+                ticks: { stroke: grid, width: 0.5 },
+                size: 38,
+              } as uPlot.Axis,
+            ]),
       ],
       series: [
         {},
@@ -169,6 +188,7 @@ export function Plot({
           stroke: COLORS[i % COLORS.length] ?? accent,
           width: 1.5,
           spanGaps: true,
+          ...(isIndep ? { scale: `y${i}` } : {}),
         })),
       ],
       hooks: {
@@ -194,32 +214,27 @@ export function Plot({
       uplotRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seriesSig, width]);
+  }, [buildSig, width]);
 
-  // Push fresh data on every tick.
   useEffect(() => {
     const u = uplotRef.current;
     if (!u || plot.series.length === 0) return;
     const data = alignData(plot.series.map((p) => buffers.get(p)?.snapshot()));
     u.setData(data);
-  }, [tick, seriesSig, plot.series, buffers]);
+  }, [tick, buildSig, plot.series, buffers]);
 
-  // Apply x-scale override (or release to auto-fit).
   useEffect(() => {
     const u = uplotRef.current;
     if (!u) return;
     if (xOverride) {
       u.setScale("x", { min: xOverride[0], max: xOverride[1] });
     } else {
-      // Returning to auto: clear by setting to current data min/max.
       const xs = u.data[0] as readonly number[];
       if (xs && xs.length > 0) {
         u.setScale("x", { min: xs[0], max: xs[xs.length - 1] });
       }
     }
   }, [xOverride]);
-
-  // --- interactions: click + wheel for scrub ---
 
   const posToTs = (clientX: number): number | null => {
     const u = uplotRef.current;
@@ -238,9 +253,6 @@ export function Plot({
     if (ts !== null) onScrubTo(ts);
   };
 
-  // Wheel: when paused, step the scrub one sample per notch. We attach
-  // via ref + addEventListener so we can call preventDefault (React's
-  // onWheel is passive and cannot).
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -254,7 +266,6 @@ export function Plot({
     return () => el.removeEventListener("wheel", handler);
   }, [paused, onStepForward, onStepBackward]);
 
-  // --- scrub line overlay position ---
   const scrubLeftPx = useMemo(() => {
     if (!paused || scrubTs === null) return null;
     const u = uplotRef.current;
@@ -262,11 +273,9 @@ export function Plot({
     const px = u.valToPos(scrubTs / 1000, "x", false);
     if (px == null || !Number.isFinite(px) || px < 0) return null;
     return px;
-    // Recompute on changes that could move the position.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paused, scrubTs, xRange, tick, width]);
 
-  // --- chip values ---
   const chipValue = (path: string): number | undefined => {
     const buf = buffers.get(path);
     if (!buf) return undefined;
@@ -288,8 +297,6 @@ export function Plot({
     if (path) onAddSeries(path);
   };
 
-  // Bottom-corner time labels: show xRange start/end. When scrubbing,
-  // also show the scrub timestamp in the middle.
   const startLabel = xRange ? timeLabel(xRange[0]) : "";
   const endLabel = xRange ? timeLabel(xRange[1]) : "";
   const scrubLabel =
@@ -301,9 +308,20 @@ export function Plot({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
+      onDoubleClick={() => setShowSettings(true)}
     >
       <div className="plot-header">
-        <span className="title">{plot.title || `Plot`}</span>
+        <span className="title">{plot.title ?? ""}</span>
+        <button
+          className="ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowSettings(true);
+          }}
+          title="Plot settings (or double-click the plot)"
+        >
+          ⚙
+        </button>
         <button className="ghost" onClick={onRemove} title="Remove plot">
           ×
         </button>
@@ -344,7 +362,6 @@ export function Plot({
             }}
           />
         )}
-        {/* time corners */}
         {xRange && (
           <>
             <div className="time-corner left">{startLabel}</div>
@@ -368,7 +385,7 @@ export function Plot({
             v === undefined
               ? "—"
               : Number.isFinite(v)
-                ? scalarToDisplay(v, info?.meta)
+                ? scalarToDisplay(v, info?.meta, CHIP_PRECISION)
                 : "—";
           return (
             <span className="chip" key={path}>
@@ -394,6 +411,16 @@ export function Plot({
           );
         })}
       </div>
+      {showSettings && (
+        <PlotSettingsDialog
+          plot={plot}
+          onSave={(patch) => {
+            onUpdate(patch);
+            setShowSettings(false);
+          }}
+          onCancel={() => setShowSettings(false)}
+        />
+      )}
     </div>
   );
 }

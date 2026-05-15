@@ -91,6 +91,8 @@ export function App() {
   const [paused, setPaused] = useState<boolean>(false);
   /** Persistent scrub-point timestamp (ms). Only meaningful when paused. */
   const [scrubTs, setScrubTs] = useState<number | null>(null);
+  /** Saved keyframe timestamps (ms). Session-only. */
+  const [keyframes, setKeyframes] = useState<number[]>([]);
 
   // Apply theme to document root.
   useEffect(() => {
@@ -324,6 +326,61 @@ export function App() {
   const stepForward = useCallback(() => scrubBy(stepMs), [scrubBy, stepMs]);
   const stepBackward = useCallback(() => scrubBy(-stepMs), [scrubBy, stepMs]);
 
+  // Keyframes: add at current scrub position, navigate to nearest prev/next.
+  const addKeyframe = useCallback(() => {
+    if (scrubTs === null) return;
+    setKeyframes((kfs) => {
+      if (kfs.includes(scrubTs)) return kfs;
+      return [...kfs, scrubTs].sort((a, b) => a - b);
+    });
+  }, [scrubTs]);
+
+  const prevKeyframe = useCallback(() => {
+    if (keyframes.length === 0) return;
+    const cur = scrubTs;
+    let target: number | null = null;
+    for (const kf of keyframes) {
+      if (cur === null || kf < cur) target = kf;
+    }
+    if (target === null) target = keyframes[keyframes.length - 1];
+    setScrubTs(target);
+  }, [keyframes, scrubTs]);
+
+  const nextKeyframe = useCallback(() => {
+    if (keyframes.length === 0) return;
+    const cur = scrubTs;
+    for (const kf of keyframes) {
+      if (cur === null || kf > cur) {
+        setScrubTs(kf);
+        return;
+      }
+    }
+    // Wrap to first.
+    setScrubTs(keyframes[0]);
+  }, [keyframes, scrubTs]);
+
+  const updatePlot = useCallback(
+    (id: string, patch: Partial<PlotPanel>) => {
+      setPlots((p) =>
+        p.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+      );
+    },
+    [],
+  );
+
+  /** Values shown in the sidebar: latest when playing, scrub-lookup when
+   * paused. Tunables always show latest (the actual current value). */
+  const displayValues = useMemo(() => {
+    if (!paused || scrubTs === null) return latest;
+    const out: Record<string, Scalar> = {};
+    for (const [path, buf] of buffersRef.current.entries()) {
+      const v = buf.valueAt(scrubTs);
+      if (v !== undefined) out[path] = v;
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latest, paused, scrubTs, tick]);
+
   // Tunable set with optimistic local update.
   const handleSet = useCallback(
     async (info: PathInfo, value: Scalar) => {
@@ -390,7 +447,7 @@ export function App() {
           onSearchChange={setSearch}
           treeExpanded={treeExpanded}
           onTreeExpandedChange={setTreeExpanded}
-          latest={latest}
+          latest={displayValues}
         />
         <PlotsArea
           plots={plots}
@@ -400,13 +457,18 @@ export function App() {
           paused={paused}
           scrubTs={scrubTs}
           columns={columns}
+          keyframes={keyframes}
           onColumnsChange={setColumns}
           onPauseToggle={togglePause}
           onStepForward={stepForward}
           onStepBackward={stepBackward}
           onScrubTo={scrubTo}
+          onAddKeyframe={addKeyframe}
+          onPrevKeyframe={prevKeyframe}
+          onNextKeyframe={nextKeyframe}
           onAddPlot={addPlot}
           onRemovePlot={removePlot}
+          onUpdatePlot={updatePlot}
           onAddSeries={addSeries}
           onRemoveSeries={removeSeries}
         />

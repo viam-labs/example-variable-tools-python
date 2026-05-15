@@ -46,11 +46,17 @@ export function scalarToNumber(value: Scalar, meta?: VariableMeta): number {
   return NaN;
 }
 
-/** Build a display label for a scalar in current-value text contexts. */
-export function scalarToDisplay(value: Scalar, meta?: VariableMeta): string {
+/** Build a display label for a scalar in current-value text contexts.
+ * ``precision`` controls the fixed decimal count for doubles (default 2;
+ * chips in the plot area use 4 for finer-grained scrubbing readouts). */
+export function scalarToDisplay(
+  value: Scalar,
+  meta?: VariableMeta,
+  precision = 2,
+): string {
   if (typeof value === "number") {
     if (meta?.type === "integer") return String(Math.trunc(value));
-    return Number.isFinite(value) ? value.toFixed(2) : String(value);
+    return Number.isFinite(value) ? value.toFixed(precision) : String(value);
   }
   if (typeof value === "boolean") return value ? "true" : "false";
   return String(value);

@@ -12,6 +12,12 @@ interface Props {
   columns: number;
   onColumnsChange: (n: number) => void;
   hasPlots: boolean;
+  keyframeCount: number;
+  canAddKeyframe: boolean;
+  canNavKeyframe: boolean;
+  onAddKeyframe: () => void;
+  onPrevKeyframe: () => void;
+  onNextKeyframe: () => void;
 }
 
 const COLUMN_OPTIONS = [1, 2, 3, 4];
@@ -30,6 +36,12 @@ export function PlotsToolbar({
   columns,
   onColumnsChange,
   hasPlots,
+  keyframeCount,
+  canAddKeyframe,
+  canNavKeyframe,
+  onAddKeyframe,
+  onPrevKeyframe,
+  onNextKeyframe,
 }: Props) {
   return (
     <div className="plots-toolbar">
@@ -60,6 +72,33 @@ export function PlotsToolbar({
       >
         ▶
       </button>
+
+      <span className="sep" />
+
+      <button
+        onClick={onAddKeyframe}
+        disabled={!canAddKeyframe}
+        title="Add a keyframe at the current scrub position"
+      >
+        ◆+
+      </button>
+      <button
+        onClick={onPrevKeyframe}
+        disabled={!canNavKeyframe}
+        title="Jump to previous keyframe"
+      >
+        ◀◆
+      </button>
+      <button
+        onClick={onNextKeyframe}
+        disabled={!canNavKeyframe}
+        title="Jump to next keyframe"
+      >
+        ◆▶
+      </button>
+      <span className="crumb" style={{ minWidth: 28 }}>
+        {keyframeCount > 0 ? `(${keyframeCount})` : ""}
+      </span>
 
       <span className="sep" />
 

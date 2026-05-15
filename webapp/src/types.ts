@@ -63,6 +63,10 @@ export interface PlotPanel {
   series: string[]; // full paths
   yMin?: number;
   yMax?: number;
+  /** "shared" = all series share one auto-scaled y axis (default).
+   *  "independent" = each series gets its own auto-scaled y scale so
+   *  variables with different magnitudes are all visible. */
+  yMode?: "shared" | "independent";
 }
 
 export interface PersistedLayout {
