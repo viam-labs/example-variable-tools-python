@@ -213,11 +213,21 @@ export function Plot({
         })}
       </div>
       <div
-        className="plot-canvas"
-        ref={containerRef}
-        style={{ height: CANVAS_HEIGHT, width: "100%", overflow: "hidden" }}
+        className="plot-canvas-wrap"
+        style={{ position: "relative", height: CANVAS_HEIGHT, width: "100%", overflow: "hidden" }}
       >
-        {plot.series.length === 0 && <div className="empty">empty</div>}
+        {/* uPlot owns this div — it must have no React-managed children, or
+            React will remove uPlot's canvas elements on re-renders. */}
+        <div
+          className="plot-canvas"
+          ref={containerRef}
+          style={{ height: "100%", width: "100%" }}
+        />
+        {plot.series.length === 0 && (
+          <div className="empty" style={{ position: "absolute", inset: 0 }}>
+            empty
+          </div>
+        )}
       </div>
     </div>
   );
