@@ -9,7 +9,15 @@ import math
 
 import pytest
 
-from src.demo import STATE_CYCLE, WAYPOINTS, Demo, _pose_at, _smoothstep
+from src.demo import (
+    STATE_CYCLE,
+    WAYPOINTS,
+    Demo,
+    _axis_angle_quat,
+    _pose_at,
+    _slerp,
+    _smoothstep,
+)
 
 
 def _make_demo() -> Demo:
@@ -156,12 +164,12 @@ def test_trajectory_paths_present():
         "pose.x",
         "pose.y",
         "pose.z",
-        "pose.o_x",
-        "pose.o_y",
-        "pose.o_z",
-        "pose.theta",
+        "pose.qw",
+        "pose.qx",
+        "pose.qy",
+        "pose.qz",
         "filtered_pose.x",
-        "filtered_pose.theta",
+        "filtered_pose.qw",
         "filter.alpha_translation",
         "filter.alpha_orientation",
     }
@@ -171,10 +179,8 @@ def test_trajectory_paths_present():
 def test_trajectory_initial_pose_is_first_waypoint():
     d = _make_demo()
     flat = d._registry.flatten()
-    assert flat["pose.x"] == WAYPOINTS[0][0]
-    assert flat["pose.y"] == WAYPOINTS[0][1]
-    assert flat["pose.z"] == WAYPOINTS[0][2]
-    assert flat["pose.theta"] == WAYPOINTS[0][6]
+    for i, name in enumerate(["x", "y", "z", "qw", "qx", "qy", "qz"]):
+        assert flat[f"pose.{name}"] == WAYPOINTS[0][i]
 
 
 def test_trajectory_state_initially_idle():
@@ -206,14 +212,15 @@ def test_pose_at_lands_on_waypoints():
 
 
 def test_pose_at_midpoint_of_segment_uses_smoothstep():
-    total = 6.0
-    # Middle of first segment: smoothstep(0.5) = 0.5 → linear midpoint.
+    n_seg = len(WAYPOINTS) - 1
+    total = float(n_seg * 2)  # 2s per segment for clean arithmetic
+    # Middle of first segment: t = 0 + seg/2 = 1.0; smoothstep(0.5) = 0.5
+    # → translation lands at the linear midpoint of WP[0]→WP[1].
     p = _pose_at(1.0, total, WAYPOINTS)
     p0 = WAYPOINTS[0]
     p1 = WAYPOINTS[1]
-    expected = tuple((a + b) / 2.0 for a, b in zip(p0, p1))
-    for got, want in zip(p, expected):
-        assert got == pytest.approx(want)
+    for i in range(3):  # x, y, z
+        assert p[i] == pytest.approx((p0[i] + p1[i]) / 2.0)
 
 
 def test_pose_at_clamps_past_total():
@@ -222,12 +229,68 @@ def test_pose_at_clamps_past_total():
         assert a == pytest.approx(b)
 
 
-def test_orientation_is_normalized_after_interpolation():
-    # Pick a time inside a segment where orientation lerps.
-    total = 6.0
-    p = _pose_at(4.5, total, WAYPOINTS)  # in segment 2 → 3 (theta change)
-    norm = math.sqrt(p[3] * p[3] + p[4] * p[4] + p[5] * p[5])
-    assert norm == pytest.approx(1.0, abs=1e-6)
+def test_quaternion_is_unit_norm_after_interpolation():
+    # Several mid-segment times across the trajectory.
+    total = 8.0
+    for t in (1.0, 2.5, 4.0, 5.5, 7.5):
+        p = _pose_at(t, total, WAYPOINTS)
+        n = math.sqrt(p[3] ** 2 + p[4] ** 2 + p[5] ** 2 + p[6] ** 2)
+        assert n == pytest.approx(1.0, abs=1e-6)
+
+
+def test_axis_angle_quat_basic_cases():
+    # 0 around any axis → identity.
+    q = _axis_angle_quat((0.0, 0.0, 1.0), 0.0)
+    assert q == pytest.approx((1.0, 0.0, 0.0, 0.0))
+    # 180 around X → (0, 1, 0, 0).
+    q = _axis_angle_quat((1.0, 0.0, 0.0), 180.0)
+    assert q[0] == pytest.approx(0.0, abs=1e-9)
+    assert q[1] == pytest.approx(1.0, abs=1e-9)
+    assert q[2] == pytest.approx(0.0, abs=1e-9)
+    assert q[3] == pytest.approx(0.0, abs=1e-9)
+    # 90 around Z → (sqrt(2)/2, 0, 0, sqrt(2)/2).
+    q = _axis_angle_quat((0.0, 0.0, 1.0), 90.0)
+    sqrt2_2 = math.sqrt(2.0) / 2.0
+    assert q[0] == pytest.approx(sqrt2_2, abs=1e-9)
+    assert q[3] == pytest.approx(sqrt2_2, abs=1e-9)
+    # Non-unit axis is normalized internally.
+    q = _axis_angle_quat((2.0, 0.0, 0.0), 90.0)
+    sqrt2_2 = math.sqrt(2.0) / 2.0
+    assert q[1] == pytest.approx(sqrt2_2, abs=1e-9)
+
+
+def test_slerp_endpoints_and_midpoint():
+    q0 = (1.0, 0.0, 0.0, 0.0)
+    q1 = _axis_angle_quat((0.0, 0.0, 1.0), 90.0)
+    assert _slerp(q0, q1, 0.0) == pytest.approx(q0)
+    assert _slerp(q0, q1, 1.0) == pytest.approx(q1)
+    # Midpoint should be the 45° rotation.
+    mid = _slerp(q0, q1, 0.5)
+    expected = _axis_angle_quat((0.0, 0.0, 1.0), 45.0)
+    for a, b in zip(mid, expected):
+        assert a == pytest.approx(b, abs=1e-9)
+
+
+def test_slerp_takes_shortest_path_via_negation():
+    q0 = (1.0, 0.0, 0.0, 0.0)
+    # Same orientation as identity but with q negated — slerp should
+    # treat them as the same and return identity-ish at any t.
+    q1 = (-1.0, 0.0, 0.0, 0.0)
+    out = _slerp(q0, q1, 0.5)
+    # Should be ~identity (or its double-cover negation).
+    assert abs(out[0]) == pytest.approx(1.0, abs=1e-6)
+    assert out[1] == pytest.approx(0.0, abs=1e-6)
+    assert out[2] == pytest.approx(0.0, abs=1e-6)
+    assert out[3] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_waypoints_actually_vary_orientation_components():
+    """The whole point of switching to quaternions: rotation should
+    visibly vary on multiple components, not just one channel."""
+    qx_vals = [wp[4] for wp in WAYPOINTS]
+    qy_vals = [wp[5] for wp in WAYPOINTS]
+    assert max(qx_vals) - min(qx_vals) > 0.1
+    assert max(qy_vals) - min(qy_vals) > 0.1
 
 
 def test_filter_alphas_are_tunable_with_bounds():
