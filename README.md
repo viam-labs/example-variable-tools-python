@@ -170,6 +170,22 @@ Runs the full pytest suite. The schema-format golden test
 (`tests/test_schema_golden.py`) is byte-stable — any intentional change to
 the schema shape must update the stored golden string.
 
+## Web UI — `webapp/`
+
+An SCS-inspired browser UI ships in `webapp/` for live inspection and tuning
+of any machine running a `vt.*`-aware resource. Searchable flat-or-tree
+variable panel on the left, drag-and-drop multi-plot time-series in the
+center, type-aware inline tunable editors at the bottom. Persists layout +
+credentials in `localStorage`.
+
+```sh
+cd webapp && npm install && npm run dev   # → http://localhost:5173
+```
+
+See `webapp/README.md` for connection setup and limitations (the headline
+one: polling-based at up to ~20 Hz over WebRTC; for control-loop scrubbing
+you'd want a streaming verb, out of scope for v1).
+
 ## What this isn't
 
 - **Not real-time at control-loop rate.** Polling over gRPC realistically

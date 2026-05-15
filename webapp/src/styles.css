@@ -1,0 +1,401 @@
+/* Minimal styling — utility-first vibes, no framework. */
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --panel-2: #1c2128;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-dim: #8b949e;
+  --accent: #58a6ff;
+  --accent-soft: rgba(88, 166, 255, 0.18);
+  --danger: #f85149;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+}
+
+button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button.primary {
+  background: var(--accent);
+  color: #0d1117;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+button.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+input,
+select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: var(--font);
+  font-size: 12px;
+}
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+}
+
+/* Connection bar */
+.connbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.connbar .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.connbar .status-dot.connected { background: var(--ok); }
+.connbar .status-dot.connecting { background: var(--warn); }
+.connbar .status-dot.disconnected { background: var(--text-dim); }
+.connbar .status-dot.error { background: var(--danger); }
+.connbar .crumb { color: var(--text-dim); }
+.connbar .crumb b { color: var(--text); font-weight: 500; }
+
+/* Main area */
+.main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 0;
+}
+
+/* Variable panel */
+.panel-vars {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+}
+.panel-vars .search {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-vars .search input {
+  flex: 1;
+}
+.panel-vars .modeswitch {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-vars .modeswitch button {
+  flex: 1;
+  font-size: 11px;
+}
+.panel-vars .modeswitch button.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.panel-vars .list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.var-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 10px;
+  cursor: grab;
+  user-select: none;
+  font-size: 12px;
+  border-left: 2px solid transparent;
+}
+.var-row:hover {
+  background: var(--panel-2);
+  border-left-color: var(--accent);
+}
+.var-row .dot {
+  font-size: 10px;
+  color: var(--text-dim);
+  width: 12px;
+  text-align: center;
+}
+.var-row .dot.tunable { color: var(--accent); }
+.var-row .name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.var-row .type {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.var-row .live {
+  color: var(--text-dim);
+  font-size: 11px;
+  min-width: 60px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-node {
+  user-select: none;
+}
+.tree-node > .label {
+  padding: 3px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.tree-node > .label:hover { color: var(--text); }
+.tree-node > .label .caret {
+  width: 10px;
+  display: inline-block;
+  font-size: 9px;
+}
+.tree-node > .children {
+  margin-left: 12px;
+  border-left: 1px solid var(--border);
+}
+
+/* Plots area */
+.plots {
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.plot {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+}
+.plot.over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.plot-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.plot-header .title {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.plot-series {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.plot-series .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.plot-series .chip .swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.plot-series .chip .rm {
+  cursor: pointer;
+  color: var(--text-dim);
+  margin-left: 2px;
+}
+.plot-series .chip .rm:hover { color: var(--danger); }
+.plot-canvas {
+  flex: 1;
+  min-height: 160px;
+  padding: 6px;
+}
+.plot-canvas .empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 12px;
+}
+
+.add-plot {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* Tunables bar */
+.tunables {
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding: 8px 12px;
+  overflow-x: auto;
+}
+.tunables h4 {
+  margin: 0 0 6px 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tunables .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tunable {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  font-size: 11px;
+}
+.tunable .path {
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+.tunable input,
+.tunable select {
+  width: 80px;
+  padding: 2px 4px;
+  font-size: 11px;
+}
+.tunable .units { color: var(--text-dim); font-size: 10px; }
+.tunable .err {
+  color: var(--danger);
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+/* Connection dialog */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.dialog {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dialog h2 {
+  margin: 0;
+  font-size: 14px;
+}
+.dialog .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dialog .field label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.dialog .field input,
+.dialog .field select {
+  width: 100%;
+}
+.dialog .actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.dialog .error {
+  color: var(--danger);
+  font-size: 11px;
+  background: rgba(248, 81, 73, 0.1);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+/* uPlot dark theme tweaks */
+.uplot {
+  font-family: var(--font);
+}
+.u-axis {
+  color: var(--text-dim);
+}
+.u-legend {
+  display: none !important;
+}

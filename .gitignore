@@ -5,3 +5,7 @@ __pycache__/
 *.tar.gz
 .pytest_cache/
 .DS_Store
+
+# webapp safety net (webapp/.gitignore handles these inside webapp/)
+node_modules/
+dist/

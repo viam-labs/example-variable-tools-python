@@ -26,6 +26,11 @@ tuning over `do_command` instead of a custom protocol).
 ## File layout
 
 ```
+webapp/                      # SCS-inspired browser UI. Vite + React + TS + uPlot + @viamrobotics/sdk. See webapp/README.md.
+  src/App.tsx                # Top-level state + layout coordinator
+  src/viam-client.ts         # SDK wrapper: probe schema (auto/aggregator/direct), dump, set
+  src/components/            # Connection bar/dialog, variable panel (flat+tree), plots, tunables bar
+  src/lib/ringbuffer.ts      # Fixed-capacity sample store for plots
 src/main.py                  # Imports Demo + Aggregator so EasyResource registers them, then Module.run_from_registry().
 src/demo.py                  # Demo Sensor — builds a registry, runs a 20 Hz fake control loop, dispatches do_command to handle_command.
 src/aggregator.py            # Aggregator Sensor — declares config["sources"] as deps, parallel vt.dump fan-out, vt.set routing.
