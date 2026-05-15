@@ -9,7 +9,7 @@ import math
 
 import pytest
 
-from src.demo import STATE_CYCLE, Demo
+from src.demo import STATE_CYCLE, WAYPOINTS, Demo, _pose_at, _smoothstep
 
 
 def _make_demo() -> Demo:
@@ -22,15 +22,17 @@ def _make_demo() -> Demo:
     d._timing = SystemTiming(d._registry)
     d._task = None
     d._t0 = 0.0
+    d._traj_state = "idle"
+    d._traj_time = 0.0
+    d._last_loop_t = None
+    d._filtered = WAYPOINTS[0]
     return d
 
 
-def test_registry_has_expected_paths():
+def test_registry_has_expected_controller_diagnostics_paths():
     d = _make_demo()
-    user_paths = {
-        k for k in d._registry.flatten().keys() if not k.startswith("system.")
-    }
-    assert user_paths == {
+    flat = set(d._registry.flatten().keys())
+    expected_subset = {
         "controller.pid.kp",
         "controller.pid.ki",
         "controller.state",
@@ -38,6 +40,7 @@ def test_registry_has_expected_paths():
         "diagnostics.fault_active",
         "diagnostics.loop_time_ms",
     }
+    assert expected_subset <= flat
 
 
 def test_registry_has_system_timing_paths():
@@ -135,3 +138,115 @@ def test_loop_math_state_cycling():
     assert STATE_CYCLE[int(t / 5.0) % len(STATE_CYCLE)] == "moving"
     t = 15.0
     assert STATE_CYCLE[int(t / 5.0) % len(STATE_CYCLE)] == "fault"
+
+
+# Trajectory + pose tests
+
+
+def test_trajectory_paths_present():
+    d = _make_demo()
+    flat = set(d._registry.flatten().keys())
+    expected = {
+        "trajectory.start",
+        "trajectory.pause",
+        "trajectory.stop",
+        "trajectory.trajectory_time",
+        "trajectory.time_in_trajectory",
+        "trajectory.state",
+        "pose.x",
+        "pose.y",
+        "pose.z",
+        "pose.o_x",
+        "pose.o_y",
+        "pose.o_z",
+        "pose.theta",
+        "filtered_pose.x",
+        "filtered_pose.theta",
+        "filter.alpha_translation",
+        "filter.alpha_orientation",
+    }
+    assert expected <= flat
+
+
+def test_trajectory_initial_pose_is_first_waypoint():
+    d = _make_demo()
+    flat = d._registry.flatten()
+    assert flat["pose.x"] == WAYPOINTS[0][0]
+    assert flat["pose.y"] == WAYPOINTS[0][1]
+    assert flat["pose.z"] == WAYPOINTS[0][2]
+    assert flat["pose.theta"] == WAYPOINTS[0][6]
+
+
+def test_trajectory_state_initially_idle():
+    d = _make_demo()
+    assert d._registry.get("trajectory.state").value == "idle"
+
+
+def test_smoothstep_endpoints_and_midpoint():
+    assert _smoothstep(0.0) == 0.0
+    assert _smoothstep(1.0) == 1.0
+    assert _smoothstep(0.5) == pytest.approx(0.5)
+    # Below 0 / above 1 clamp.
+    assert _smoothstep(-0.1) == 0.0
+    assert _smoothstep(1.1) == 1.0
+
+
+def test_pose_at_lands_on_waypoints():
+    total = 9.0
+    n_seg = len(WAYPOINTS) - 1
+    seg = total / n_seg
+    # Each waypoint boundary should equal the corresponding waypoint.
+    for i, wp in enumerate(WAYPOINTS):
+        t = i * seg
+        if i == len(WAYPOINTS) - 1:
+            t = total
+        p = _pose_at(t, total, WAYPOINTS)
+        for a, b in zip(p, wp):
+            assert a == pytest.approx(b)
+
+
+def test_pose_at_midpoint_of_segment_uses_smoothstep():
+    total = 6.0
+    # Middle of first segment: smoothstep(0.5) = 0.5 → linear midpoint.
+    p = _pose_at(1.0, total, WAYPOINTS)
+    p0 = WAYPOINTS[0]
+    p1 = WAYPOINTS[1]
+    expected = tuple((a + b) / 2.0 for a, b in zip(p0, p1))
+    for got, want in zip(p, expected):
+        assert got == pytest.approx(want)
+
+
+def test_pose_at_clamps_past_total():
+    p = _pose_at(100.0, 5.0, WAYPOINTS)
+    for a, b in zip(p, WAYPOINTS[-1]):
+        assert a == pytest.approx(b)
+
+
+def test_orientation_is_normalized_after_interpolation():
+    # Pick a time inside a segment where orientation lerps.
+    total = 6.0
+    p = _pose_at(4.5, total, WAYPOINTS)  # in segment 2 → 3 (theta change)
+    norm = math.sqrt(p[3] * p[3] + p[4] * p[4] + p[5] * p[5])
+    assert norm == pytest.approx(1.0, abs=1e-6)
+
+
+def test_filter_alphas_are_tunable_with_bounds():
+    d = _make_demo()
+    a_t = d._registry.get("filter.alpha_translation")
+    a_o = d._registry.get("filter.alpha_orientation")
+    assert a_t.tunable and a_o.tunable
+    assert a_t.min == 0.001 and a_t.max == 1.0
+    assert a_o.min == 0.001 and a_o.max == 1.0
+
+
+def test_trajectory_controls_are_tunable():
+    d = _make_demo()
+    for path in ("trajectory.start", "trajectory.pause", "trajectory.stop"):
+        assert d._registry.get(path).tunable is True
+    assert d._registry.get("trajectory.trajectory_time").tunable is True
+
+
+def test_trajectory_state_and_time_in_trajectory_are_read_only():
+    d = _make_demo()
+    assert d._registry.get("trajectory.state").tunable is False
+    assert d._registry.get("trajectory.time_in_trajectory").tunable is False
