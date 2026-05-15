@@ -239,12 +239,29 @@ export function Plot({
     }
   }, [xOverride]);
 
+  /** Offset (CSS px) of uPlot's plot area within our containerRef, plus the
+   * plot area's CSS width. uPlot reserves left margin for the y-axis when
+   * present, so the plot area is narrower than the container — using the
+   * container as the basis for px↔value conversions silently shifts every
+   * click and overlay by the y-axis width. Use ``u.over`` (the overlay
+   * element positioned exactly at the plot area) as the source of truth. */
+  const plotArea = (): { left: number; width: number } | null => {
+    const u = uplotRef.current;
+    const container = containerRef.current;
+    if (!u || !container) return null;
+    const overRect = u.over.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    return {
+      left: overRect.left - containerRect.left,
+      width: overRect.width,
+    };
+  };
+
   const posToTs = (clientX: number): number | null => {
     const u = uplotRef.current;
-    const el = containerRef.current;
-    if (!u || !el) return null;
-    const rect = el.getBoundingClientRect();
-    const left = clientX - rect.left;
+    if (!u) return null;
+    const overRect = u.over.getBoundingClientRect();
+    const left = clientX - overRect.left;
     const xVal = u.posToVal(left, "x");
     if (xVal == null || !Number.isFinite(xVal)) return null;
     return xVal * 1000;
@@ -276,11 +293,13 @@ export function Plot({
       const dx = e.clientX - panLastXRef.current;
       panLastXRef.current = e.clientX;
       const u = uplotRef.current;
-      if (!u || !width) return;
+      if (!u) return;
       const sx = u.scales.x;
       if (sx.min == null || sx.max == null) return;
+      const area = plotArea();
+      if (!area || area.width === 0) return;
       const rangeMs = (sx.max - sx.min) * 1000;
-      const dtMs = (dx / width) * rangeMs;
+      const dtMs = (dx / area.width) * rangeMs;
       // Drag right → view should follow content right → xMin decreases.
       onPanByMs(-dtMs);
     }
@@ -317,13 +336,19 @@ export function Plot({
     return () => el.removeEventListener("wheel", handler);
   }, [paused, onStepForward, onStepBackward]);
 
-  // Compute pixel positions of scrub line and keyframe lines.
+  // Compute pixel positions of scrub / keyframe lines, in container coords.
+  // valToPos returns CSS pixels relative to the plot area's left edge — we
+  // add the plot-area offset so the rendered line (positioned in our wrap
+  // div) aligns with the plotted data.
   const pxFor = (tsMs: number): number | null => {
     const u = uplotRef.current;
     if (!u) return null;
-    const px = u.valToPos(tsMs / 1000, "x", false);
-    if (px == null || !Number.isFinite(px) || px < 0) return null;
-    return px;
+    const xRel = u.valToPos(tsMs / 1000, "x", false);
+    if (xRel == null || !Number.isFinite(xRel)) return null;
+    const area = plotArea();
+    if (!area) return null;
+    if (xRel < 0 || xRel > area.width) return null;
+    return area.left + xRel;
   };
 
   const scrubLeftPx = useMemo(() => {
@@ -477,15 +502,28 @@ export function Plot({
             }}
           />
         )}
-        {xRange && (
-          <>
-            <div className="time-corner left">{startLabel}</div>
-            <div className="time-corner right">{endLabel}</div>
-            {scrubLabel && (
-              <div className="time-corner center">{scrubLabel}</div>
-            )}
-          </>
-        )}
+        {xRange && (() => {
+          const area = plotArea();
+          if (!area) return null;
+          return (
+            <div
+              className="time-corner-band"
+              style={{
+                position: "absolute",
+                bottom: 2,
+                left: area.left,
+                width: area.width,
+                pointerEvents: "none",
+              }}
+            >
+              <div className="time-corner left">{startLabel}</div>
+              <div className="time-corner right">{endLabel}</div>
+              {scrubLabel && (
+                <div className="time-corner center">{scrubLabel}</div>
+              )}
+            </div>
+          );
+        })()}
       </div>
       <div className="plot-series">
         {plot.series.length === 0 && (
