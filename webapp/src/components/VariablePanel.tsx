@@ -13,6 +13,7 @@ interface Props {
   latest: Record<string, Scalar>;
   width: number;
   onWidthChange: (px: number) => void;
+  onSet: (info: PathInfo, value: Scalar) => void;
 }
 
 export function VariablePanel({
@@ -25,6 +26,7 @@ export function VariablePanel({
   latest,
   width,
   onWidthChange,
+  onSet,
 }: Props) {
   const dragStart = useRef<{ x: number; w: number } | null>(null);
   const onResizeDown = (e: React.PointerEvent) => {
@@ -136,6 +138,7 @@ export function VariablePanel({
           filterActive={lower.length > 0}
           selected={selected}
           onSelect={handleSelect}
+          onSet={onSet}
         />
       </div>
     </div>
@@ -209,6 +212,7 @@ function TreeList({
   filterActive,
   selected,
   onSelect,
+  onSet,
 }: {
   paths: PathInfo[];
   pathsBySource: Map<string, PathInfo[]>;
@@ -218,6 +222,7 @@ function TreeList({
   filterActive: boolean;
   selected: Set<string>;
   onSelect: (path: string, e: React.MouseEvent) => void;
+  onSet: (info: PathInfo, value: Scalar) => void;
 }) {
   const root = useMemo(
     () => buildTree(pathsBySource, paths),
@@ -261,6 +266,7 @@ function TreeList({
                 selected={selected.has(p.fullPath)}
                 onSelect={onSelect}
                 selectedPaths={selected}
+                onSet={onSet}
               />
             ))}
           </div>

@@ -649,6 +649,7 @@ export function App() {
           onWidthChange={(w) =>
             setSidebarWidth(Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, w)))
           }
+          onSet={handleSet}
         />
         <PlotsArea
           plots={plots}
