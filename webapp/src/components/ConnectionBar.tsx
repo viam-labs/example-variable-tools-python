@@ -15,10 +15,9 @@ interface Props {
   latestKeys: number;
   pathCount: number;
   lastDumpAt: number | null;
-  paused: boolean;
-  onPauseToggle: () => void;
   windowSec: number;
   onWindowSecChange: (sec: number) => void;
+  paused: boolean;
 }
 
 const RATES = [1, 2, 5, 10, 20, 30];
@@ -45,10 +44,9 @@ export function ConnectionBar({
   latestKeys,
   pathCount,
   lastDumpAt,
-  paused,
-  onPauseToggle,
   windowSec,
   onWindowSecChange,
+  paused,
 }: Props) {
   const ageMs = lastDumpAt ? Date.now() - lastDumpAt : null;
   const dotClass =
@@ -127,13 +125,6 @@ export function ConnectionBar({
           ))}
         </select>
       </label>
-      <button
-        onClick={onPauseToggle}
-        title={paused ? "Resume polling (R)" : "Pause polling (Space)"}
-        className={paused ? "primary" : ""}
-      >
-        {paused ? "▶ Resume" : "⏸ Pause"}
-      </button>
       <button
         onClick={onThemeToggle}
         title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}

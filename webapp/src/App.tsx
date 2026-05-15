@@ -25,6 +25,7 @@ import {
 
 const LS_KEY = "variable-tools-scope:layout";
 const DEFAULT_WINDOW_SEC = 30;
+const DEFAULT_COLUMNS = 1;
 
 function loadLayout(): PersistedLayout {
   try {
@@ -38,6 +39,7 @@ function loadLayout(): PersistedLayout {
       connection: parsed.connection,
       theme: parsed.theme ?? "dark",
       windowSec: parsed.windowSec ?? DEFAULT_WINDOW_SEC,
+      columns: parsed.columns ?? DEFAULT_COLUMNS,
     };
   } catch {
     return {
@@ -46,6 +48,7 @@ function loadLayout(): PersistedLayout {
       pollRateHz: 10,
       theme: "dark",
       windowSec: DEFAULT_WINDOW_SEC,
+      columns: DEFAULT_COLUMNS,
     };
   }
 }
@@ -84,8 +87,10 @@ export function App() {
   const [plots, setPlots] = useState<PlotPanel[]>(initial.plots);
   const [theme, setTheme] = useState<"dark" | "light">(initial.theme);
   const [windowSec, setWindowSec] = useState<number>(initial.windowSec);
+  const [columns, setColumns] = useState<number>(initial.columns);
   const [paused, setPaused] = useState<boolean>(false);
-  const [cursorTs, setCursorTs] = useState<number | null>(null);
+  /** Persistent scrub-point timestamp (ms). Only meaningful when paused. */
+  const [scrubTs, setScrubTs] = useState<number | null>(null);
 
   // Apply theme to document root.
   useEffect(() => {
@@ -93,13 +98,13 @@ export function App() {
   }, [theme]);
 
   const [latest, setLatest] = useState<Record<string, Scalar>>({});
-  const [tick, setTick] = useState(0); // bumped on each successful dump
+  const [tick, setTick] = useState(0);
   const [lastDumpAt, setLastDumpAt] = useState<number | null>(null);
   const [setErrors, setSetErrors] = useState<Record<string, string>>({});
 
   const buffersRef = useRef<Map<string, RingBuffer>>(new Map());
 
-  // Persist layout on relevant changes.
+  // Persist layout.
   useEffect(() => {
     saveLayout({
       connection,
@@ -108,8 +113,9 @@ export function App() {
       pollRateHz,
       theme,
       windowSec,
+      columns,
     });
-  }, [connection, plots, treeExpanded, pollRateHz, theme, windowSec]);
+  }, [connection, plots, treeExpanded, pollRateHz, theme, windowSec, columns]);
 
   // Apply window changes to all existing buffers.
   useEffect(() => {
@@ -118,8 +124,6 @@ export function App() {
     }
   }, [windowSec]);
 
-  // Manage ring buffers: create on first sight of a path, never delete (they
-  // hold history that may still be referenced by plot series).
   const ensureBuffers = useCallback(
     (paths: PathInfo[]) => {
       const bufs = buffersRef.current;
@@ -132,7 +136,6 @@ export function App() {
     [windowSec],
   );
 
-  // Connection lifecycle.
   const handleConnect = useCallback(
     async (cfg: ConnectionConfig) => {
       setStatus({ state: "connecting" });
@@ -171,7 +174,7 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Polling loop. Restarts when session or rate changes. Skips when paused.
+  // Polling loop. Restarts when session/rate changes. Skips when paused.
   useEffect(() => {
     if (!session || paused) return;
     let cancelled = false;
@@ -265,6 +268,62 @@ export function App() {
     );
   }, []);
 
+  // Pause / resume / scrub.
+  const togglePause = useCallback(() => {
+    setPaused((p) => {
+      const next = !p;
+      if (next) {
+        // Initialize scrub at latest sample timestamp.
+        setScrubTs(lastDumpAt);
+      } else {
+        setScrubTs(null);
+      }
+      return next;
+    });
+  }, [lastDumpAt]);
+
+  const stepMs = Math.max(1, Math.round(1000 / pollRateHz));
+
+  /** Get the [oldest, newest] timestamps across all buffers, for clamping. */
+  const scrubBounds = useCallback((): [number, number] | null => {
+    let oldest = Infinity;
+    let newest = -Infinity;
+    for (const buf of buffersRef.current.values()) {
+      const [xs] = buf.snapshot();
+      if (xs.length === 0) continue;
+      if (xs[0] < oldest) oldest = xs[0];
+      if (xs[xs.length - 1] > newest) newest = xs[xs.length - 1];
+    }
+    if (!Number.isFinite(oldest) || !Number.isFinite(newest)) return null;
+    return [oldest, newest];
+  }, []);
+
+  const scrubTo = useCallback(
+    (ts: number) => {
+      const bounds = scrubBounds();
+      if (!bounds) return;
+      const [lo, hi] = bounds;
+      setScrubTs(Math.max(lo, Math.min(hi, ts)));
+    },
+    [scrubBounds],
+  );
+
+  const scrubBy = useCallback(
+    (deltaMs: number) => {
+      setScrubTs((cur) => {
+        if (cur === null) return cur;
+        const bounds = scrubBounds();
+        if (!bounds) return cur;
+        const [lo, hi] = bounds;
+        return Math.max(lo, Math.min(hi, cur + deltaMs));
+      });
+    },
+    [scrubBounds],
+  );
+
+  const stepForward = useCallback(() => scrubBy(stepMs), [scrubBy, stepMs]);
+  const stepBackward = useCallback(() => scrubBy(-stepMs), [scrubBy, stepMs]);
+
   // Tunable set with optimistic local update.
   const handleSet = useCallback(
     async (info: PathInfo, value: Scalar) => {
@@ -319,13 +378,9 @@ export function App() {
         latestKeys={Object.keys(latest).length}
         pathCount={session?.paths.length ?? 0}
         lastDumpAt={lastDumpAt}
-        paused={paused}
-        onPauseToggle={() => {
-          setPaused((p) => !p);
-          if (paused) setCursorTs(null); // resume → drop scrub cursor
-        }}
         windowSec={windowSec}
         onWindowSecChange={setWindowSec}
+        paused={paused}
       />
       <div className="main">
         <VariablePanel
@@ -343,8 +398,13 @@ export function App() {
           paths={session?.paths ?? []}
           tick={tick}
           paused={paused}
-          cursorTs={cursorTs}
-          onCursorTsChange={setCursorTs}
+          scrubTs={scrubTs}
+          columns={columns}
+          onColumnsChange={setColumns}
+          onPauseToggle={togglePause}
+          onStepForward={stepForward}
+          onStepBackward={stepBackward}
+          onScrubTo={scrubTo}
           onAddPlot={addPlot}
           onRemovePlot={removePlot}
           onAddSeries={addSeries}

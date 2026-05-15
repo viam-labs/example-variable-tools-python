@@ -11,11 +11,14 @@ interface Props {
   pathsByFull: Map<string, PathInfo>;
   tick: number;
   paused: boolean;
-  cursorTs: number | null;
-  onCursorTsChange: (ts: number | null) => void;
+  scrubTs: number | null;
+  xOverride: [number, number] | null;
   onRemove: () => void;
   onAddSeries: (path: string) => void;
   onRemoveSeries: (path: string) => void;
+  onScrubTo: (ts: number) => void;
+  onStepForward: () => void;
+  onStepBackward: () => void;
 }
 
 const COLORS = [
@@ -29,16 +32,21 @@ const COLORS = [
   "#56d364",
 ];
 
-const CANVAS_HEIGHT = 220;
+const CANVAS_HEIGHT = 160;
 const CURSOR_SYNC_KEY = "vt-scope";
 
-function tsLabel(secs: number): string {
+/** ms-precision time label like "14:59:25.123". */
+function timeLabel(secs: number): string {
+  if (!Number.isFinite(secs)) return "";
   const d = new Date(secs * 1000);
-  return d.toLocaleTimeString("en-US", { hour12: false });
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  const ms = String(d.getMilliseconds()).padStart(3, "0");
+  return `${hh}:${mm}:${ss}.${ms}`;
 }
 
-/** Build an uPlot AlignedData from a set of (xs, ys) snapshots, aligning
- * onto a unified x axis. */
+/** Build an aligned uPlot data set across multiple buffers via union of x. */
 function alignData(
   snapshots: Array<[number[], number[]] | undefined>,
 ): uPlot.AlignedData {
@@ -77,17 +85,24 @@ export function Plot({
   pathsByFull,
   tick,
   paused,
-  cursorTs,
-  onCursorTsChange,
+  scrubTs,
+  xOverride,
   onRemove,
   onAddSeries,
   onRemoveSeries,
+  onScrubTo,
+  onStepForward,
+  onStepBackward,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const uplotRef = useRef<uPlot | null>(null);
   const [over, setOver] = useState(false);
 
   const seriesSig = useMemo(() => plot.series.join("|"), [plot.series]);
+
+  // Track current x scale for our time-corner labels and scrub-line position.
+  const [xRange, setXRange] = useState<[number, number] | null>(null);
 
   // Width tracking for responsive plot.
   const [width, setWidth] = useState(0);
@@ -118,8 +133,9 @@ export function Plot({
       height: CANVAS_HEIGHT,
       pxAlign: false,
       cursor: {
-        drag: { x: true, y: false, setScale: true },
-        points: { show: true },
+        // No drag-to-zoom — zoom is via toolbar buttons. Keep crosshair sync.
+        drag: { x: false, y: false, setScale: false },
+        points: { show: true, size: 5 },
         sync: {
           key: CURSOR_SYNC_KEY,
           scales: ["x", null],
@@ -134,12 +150,16 @@ export function Plot({
           stroke,
           grid: { stroke: grid, width: 0.5 },
           ticks: { stroke: grid, width: 0.5 },
-          values: (_u, vals) => vals.map(tsLabel),
+          // Suppress per-tick labels — we render only start/end in the
+          // bottom corners as overlays. Tick lines stay visible.
+          values: () => [],
+          size: 4,
         },
         {
           stroke,
           grid: { stroke: grid, width: 0.5 },
           ticks: { stroke: grid, width: 0.5 },
+          size: 38,
         },
       ],
       series: [
@@ -152,18 +172,11 @@ export function Plot({
         })),
       ],
       hooks: {
-        setCursor: [
+        setScale: [
           (u) => {
-            const left = u.cursor.left;
-            if (left == null || left < 0) {
-              onCursorTsChange(null);
-              return;
-            }
-            const xVal = u.posToVal(left, "x");
-            if (xVal != null && Number.isFinite(xVal)) {
-              onCursorTsChange(xVal * 1000);
-            } else {
-              onCursorTsChange(null);
+            const sx = u.scales.x;
+            if (sx.min != null && sx.max != null) {
+              setXRange([sx.min, sx.max]);
             }
           },
         ],
@@ -191,6 +204,76 @@ export function Plot({
     u.setData(data);
   }, [tick, seriesSig, plot.series, buffers]);
 
+  // Apply x-scale override (or release to auto-fit).
+  useEffect(() => {
+    const u = uplotRef.current;
+    if (!u) return;
+    if (xOverride) {
+      u.setScale("x", { min: xOverride[0], max: xOverride[1] });
+    } else {
+      // Returning to auto: clear by setting to current data min/max.
+      const xs = u.data[0] as readonly number[];
+      if (xs && xs.length > 0) {
+        u.setScale("x", { min: xs[0], max: xs[xs.length - 1] });
+      }
+    }
+  }, [xOverride]);
+
+  // --- interactions: click + wheel for scrub ---
+
+  const posToTs = (clientX: number): number | null => {
+    const u = uplotRef.current;
+    const el = containerRef.current;
+    if (!u || !el) return null;
+    const rect = el.getBoundingClientRect();
+    const left = clientX - rect.left;
+    const xVal = u.posToVal(left, "x");
+    if (xVal == null || !Number.isFinite(xVal)) return null;
+    return xVal * 1000;
+  };
+
+  const onClick = (e: React.MouseEvent) => {
+    if (!paused) return;
+    const ts = posToTs(e.clientX);
+    if (ts !== null) onScrubTo(ts);
+  };
+
+  // Wheel: when paused, step the scrub one sample per notch. We attach
+  // via ref + addEventListener so we can call preventDefault (React's
+  // onWheel is passive and cannot).
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      if (!paused) return;
+      e.preventDefault();
+      if (e.deltaY > 0) onStepForward();
+      else if (e.deltaY < 0) onStepBackward();
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, [paused, onStepForward, onStepBackward]);
+
+  // --- scrub line overlay position ---
+  const scrubLeftPx = useMemo(() => {
+    if (!paused || scrubTs === null) return null;
+    const u = uplotRef.current;
+    if (!u) return null;
+    const px = u.valToPos(scrubTs / 1000, "x", false);
+    if (px == null || !Number.isFinite(px) || px < 0) return null;
+    return px;
+    // Recompute on changes that could move the position.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paused, scrubTs, xRange, tick, width]);
+
+  // --- chip values ---
+  const chipValue = (path: string): number | undefined => {
+    const buf = buffers.get(path);
+    if (!buf) return undefined;
+    if (paused && scrubTs !== null) return buf.valueAt(scrubTs);
+    return buf.last()?.value;
+  };
+
   const onDragOver = (e: React.DragEvent) => {
     if (e.dataTransfer.types.includes("text/vt-path")) {
       e.preventDefault();
@@ -205,25 +288,12 @@ export function Plot({
     if (path) onAddSeries(path);
   };
 
-  const resetZoom = () => {
-    const u = uplotRef.current;
-    if (!u) return;
-    u.setScale("x", { min: null as unknown as number, max: null as unknown as number });
-    u.setScale("y", { min: null as unknown as number, max: null as unknown as number });
-  };
-
-  // Compute current chip values: at cursor when scrubbing, latest otherwise.
-  const chipValue = (path: string): number | undefined => {
-    const buf = buffers.get(path);
-    if (!buf) return undefined;
-    if (cursorTs !== null) return buf.valueAt(cursorTs);
-    return buf.last()?.value;
-  };
-
-  const sampleCount = plot.series.reduce(
-    (acc, p) => acc + (buffers.get(p)?.length ?? 0),
-    0,
-  );
+  // Bottom-corner time labels: show xRange start/end. When scrubbing,
+  // also show the scrub timestamp in the middle.
+  const startLabel = xRange ? timeLabel(xRange[0]) : "";
+  const endLabel = xRange ? timeLabel(xRange[1]) : "";
+  const scrubLabel =
+    paused && scrubTs !== null ? timeLabel(scrubTs / 1000) : "";
 
   return (
     <div
@@ -234,21 +304,56 @@ export function Plot({
     >
       <div className="plot-header">
         <span className="title">{plot.title || `Plot`}</span>
-        {plot.series.length > 0 && (
-          <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
-            {sampleCount} samples
-          </span>
-        )}
-        <button
-          onClick={resetZoom}
-          title="Reset zoom (or double-click the plot)"
-          disabled={plot.series.length === 0}
-        >
-          ⟲ zoom
-        </button>
-        <button className="danger" onClick={onRemove} title="Remove plot">
+        <button className="ghost" onClick={onRemove} title="Remove plot">
           ×
         </button>
+      </div>
+      <div
+        className="plot-canvas-wrap"
+        ref={wrapRef}
+        style={{
+          position: "relative",
+          height: CANVAS_HEIGHT,
+          width: "100%",
+          overflow: "hidden",
+          cursor: paused ? "ew-resize" : "default",
+        }}
+        onClick={onClick}
+      >
+        <div
+          className="plot-canvas"
+          ref={containerRef}
+          style={{ height: "100%", width: "100%" }}
+        />
+        {plot.series.length === 0 && (
+          <div className="empty" style={{ position: "absolute", inset: 0 }}>
+            empty
+          </div>
+        )}
+        {scrubLeftPx !== null && (
+          <div
+            className="scrub-line"
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: scrubLeftPx,
+              width: 0,
+              borderLeft: "1.5px solid var(--accent)",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+        {/* time corners */}
+        {xRange && (
+          <>
+            <div className="time-corner left">{startLabel}</div>
+            <div className="time-corner right">{endLabel}</div>
+            {scrubLabel && (
+              <div className="time-corner center">{scrubLabel}</div>
+            )}
+          </>
+        )}
       </div>
       <div className="plot-series">
         {plot.series.length === 0 && (
@@ -288,27 +393,6 @@ export function Plot({
             </span>
           );
         })}
-      </div>
-      <div
-        className="plot-canvas-wrap"
-        style={{
-          position: "relative",
-          height: CANVAS_HEIGHT,
-          width: "100%",
-          overflow: "hidden",
-        }}
-      >
-        {/* uPlot owns this div — it must have no React-managed children. */}
-        <div
-          className="plot-canvas"
-          ref={containerRef}
-          style={{ height: "100%", width: "100%" }}
-        />
-        {plot.series.length === 0 && (
-          <div className="empty" style={{ position: "absolute", inset: 0 }}>
-            empty
-          </div>
-        )}
       </div>
     </div>
   );

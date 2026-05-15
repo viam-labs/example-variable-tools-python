@@ -72,4 +72,5 @@ export interface PersistedLayout {
   pollRateHz: number;
   theme: "dark" | "light";
   windowSec: number;
+  columns: number;
 }
