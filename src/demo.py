@@ -28,7 +28,7 @@ from viam.resource.easy_resource import EasyResource
 from viam.resource.types import Model, ModelFamily
 from viam.utils import SensorReading, ValueTypes
 
-from .variable_tools import Registry, handle_command
+from .variable_tools import Registry, SystemTiming, handle_command
 
 LOGGER = getLogger(__name__)
 
@@ -47,6 +47,7 @@ class Demo(Sensor, EasyResource):
     def __init__(self, name: str):
         super().__init__(name)
         self._registry = self._build_registry()
+        self._timing = SystemTiming(self._registry)
         self._task: Optional[asyncio.Task] = None
         self._t0 = time.monotonic()
 
@@ -97,6 +98,7 @@ class Demo(Sensor, EasyResource):
         if self._task is not None and not self._task.done():
             self._task.cancel()
         self._t0 = time.monotonic()
+        self._timing.reset()
         try:
             self._task = asyncio.create_task(self._loop())
         except RuntimeError:
@@ -111,6 +113,7 @@ class Demo(Sensor, EasyResource):
         state = self._registry.get("controller.state")
         try:
             while True:
+                self._timing.tick()
                 t = time.monotonic() - self._t0
                 loop_count.value = loop_count.value + 1
                 loop_time_ms.value = 10.0 + 2.0 * math.sin(

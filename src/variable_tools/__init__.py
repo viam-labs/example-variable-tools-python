@@ -15,6 +15,7 @@ from .registry import (
     Registry,
     Variable,
 )
+from .timing import SystemTiming
 
 __all__ = [
     "Registry",
@@ -23,6 +24,7 @@ __all__ = [
     "Integer",
     "Boolean",
     "Enum",
+    "SystemTiming",
     "handle_command",
     "NAME_RE",
     "PATH_SEP",

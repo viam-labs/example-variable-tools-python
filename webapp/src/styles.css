@@ -1,5 +1,6 @@
 /* Minimal styling — utility-first vibes, no framework. */
-:root {
+:root,
+[data-theme="dark"] {
   --bg: #0d1117;
   --panel: #161b22;
   --panel-2: #1c2128;
@@ -12,6 +13,20 @@
   --ok: #3fb950;
   --warn: #d29922;
   --font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+[data-theme="light"] {
+  --bg: #ffffff;
+  --panel: #f6f8fa;
+  --panel-2: #ffffff;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --text-dim: #59636e;
+  --accent: #0969da;
+  --accent-soft: rgba(9, 105, 218, 0.10);
+  --danger: #cf222e;
+  --ok: #1a7f37;
+  --warn: #9a6700;
 }
 
 * {
@@ -125,20 +140,6 @@ select:focus {
 .panel-vars .search input {
   flex: 1;
 }
-.panel-vars .modeswitch {
-  display: flex;
-  gap: 4px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-.panel-vars .modeswitch button {
-  flex: 1;
-  font-size: 11px;
-}
-.panel-vars .modeswitch button.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
 .panel-vars .list {
   overflow-y: auto;
   flex: 1;
@@ -224,7 +225,6 @@ select:focus {
   border-radius: 6px;
   display: flex;
   flex-direction: column;
-  min-height: 220px;
 }
 .plot.over {
   border-color: var(--accent);
@@ -272,18 +272,19 @@ select:focus {
 }
 .plot-series .chip .rm:hover { color: var(--danger); }
 .plot-canvas {
-  flex: 1;
-  min-height: 160px;
   padding: 6px;
+  position: relative;
 }
 .plot-canvas .empty {
-  height: 100%;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-dim);
   font-style: italic;
   font-size: 12px;
+  pointer-events: none;
 }
 
 .add-plot {

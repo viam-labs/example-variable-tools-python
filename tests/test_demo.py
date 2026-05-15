@@ -15,8 +15,11 @@ from src.demo import STATE_CYCLE, Demo
 def _make_demo() -> Demo:
     """Construct a Demo without the framework lifecycle. Registry is built
     in __init__ but no asyncio task starts."""
+    from src.variable_tools import SystemTiming
+
     d = Demo.__new__(Demo)
     d._registry = Demo._build_registry()
+    d._timing = SystemTiming(d._registry)
     d._task = None
     d._t0 = 0.0
     return d
@@ -24,7 +27,10 @@ def _make_demo() -> Demo:
 
 def test_registry_has_expected_paths():
     d = _make_demo()
-    assert set(d._registry.flatten().keys()) == {
+    user_paths = {
+        k for k in d._registry.flatten().keys() if not k.startswith("system.")
+    }
+    assert user_paths == {
         "controller.pid.kp",
         "controller.pid.ki",
         "controller.state",
@@ -32,6 +38,16 @@ def test_registry_has_expected_paths():
         "diagnostics.fault_active",
         "diagnostics.loop_time_ms",
     }
+
+
+def test_registry_has_system_timing_paths():
+    d = _make_demo()
+    flat = d._registry.flatten()
+    assert "system.epoch_s" in flat
+    assert "system.uptime_s" in flat
+    assert "system.loop_period_ms" in flat
+    assert "system.loop_jitter_ms" in flat
+    assert "system.tick_count" in flat
 
 
 def test_initial_values():

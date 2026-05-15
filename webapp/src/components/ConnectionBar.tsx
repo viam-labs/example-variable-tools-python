@@ -9,6 +9,8 @@ interface Props {
   onPollRateChange: (hz: number) => void;
   onEditConnection: () => void;
   onDisconnect: () => void;
+  theme: "dark" | "light";
+  onThemeToggle: () => void;
 }
 
 const RATES = [1, 2, 5, 10, 20, 30];
@@ -22,6 +24,8 @@ export function ConnectionBar({
   onPollRateChange,
   onEditConnection,
   onDisconnect,
+  theme,
+  onThemeToggle,
 }: Props) {
   const dotClass =
     status.state === "connected"
@@ -67,6 +71,9 @@ export function ConnectionBar({
           ))}
         </select>
       </label>
+      <button onClick={onThemeToggle} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
+        {theme === "dark" ? "☀" : "☾"}
+      </button>
       <button onClick={onEditConnection}>Connection…</button>
       {status.state === "connected" && (
         <button onClick={onDisconnect}>Disconnect</button>

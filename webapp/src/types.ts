@@ -68,7 +68,7 @@ export interface PlotPanel {
 export interface PersistedLayout {
   connection?: ConnectionConfig;
   plots: PlotPanel[];
-  viewMode: "flat" | "tree";
   treeExpanded: string[];
   pollRateHz: number;
+  theme: "dark" | "light";
 }

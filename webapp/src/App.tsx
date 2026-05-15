@@ -33,13 +33,13 @@ function loadLayout(): PersistedLayout {
     const parsed = JSON.parse(raw) as PersistedLayout;
     return {
       plots: parsed.plots ?? [],
-      viewMode: parsed.viewMode ?? "flat",
       treeExpanded: parsed.treeExpanded ?? [],
       pollRateHz: parsed.pollRateHz ?? 10,
       connection: parsed.connection,
+      theme: parsed.theme ?? "dark",
     };
   } catch {
-    return { plots: [], viewMode: "flat", treeExpanded: [], pollRateHz: 10 };
+    return { plots: [], treeExpanded: [], pollRateHz: 10, theme: "dark" };
   }
 }
 
@@ -70,12 +70,17 @@ export function App() {
   );
 
   const [search, setSearch] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"flat" | "tree">(initial.viewMode);
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(
     new Set(initial.treeExpanded),
   );
   const [pollRateHz, setPollRateHz] = useState<number>(initial.pollRateHz);
   const [plots, setPlots] = useState<PlotPanel[]>(initial.plots);
+  const [theme, setTheme] = useState<"dark" | "light">(initial.theme);
+
+  // Apply theme to document root.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   const [latest, setLatest] = useState<Record<string, Scalar>>({});
   const [tick, setTick] = useState(0); // bumped on each successful dump
@@ -88,11 +93,11 @@ export function App() {
     saveLayout({
       connection,
       plots,
-      viewMode,
       treeExpanded: Array.from(treeExpanded),
       pollRateHz,
+      theme,
     });
-  }, [connection, plots, viewMode, treeExpanded, pollRateHz]);
+  }, [connection, plots, treeExpanded, pollRateHz, theme]);
 
   // Manage ring buffers: create on first sight of a path, never delete (they
   // hold history that may still be referenced by plot series).
@@ -274,6 +279,8 @@ export function App() {
         onPollRateChange={setPollRateHz}
         onEditConnection={() => setShowDialog(true)}
         onDisconnect={handleDisconnect}
+        theme={theme}
+        onThemeToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
       />
       <div className="main">
         <VariablePanel
@@ -281,8 +288,6 @@ export function App() {
           pathsBySource={pathsBySource}
           search={search}
           onSearchChange={setSearch}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
           treeExpanded={treeExpanded}
           onTreeExpandedChange={setTreeExpanded}
           latest={latest}

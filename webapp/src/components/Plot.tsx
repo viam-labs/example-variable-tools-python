@@ -25,9 +25,44 @@ const COLORS = [
   "#56d364",
 ];
 
-function tsToHHMMSS(ts: number): string {
-  const d = new Date(ts);
-  return d.toLocaleTimeString();
+const CANVAS_HEIGHT = 220;
+
+function tsLabel(secs: number): string {
+  const d = new Date(secs * 1000);
+  return d.toLocaleTimeString("en-US", { hour12: false });
+}
+
+/** Build an uPlot AlignedData from a set of (xs, ys) snapshots, aligning
+ * onto a unified x axis (the union of all timestamps). For each series,
+ * the value at a given x is the most recent sample at-or-before x. */
+function alignData(snapshots: Array<[number[], number[]] | undefined>): uPlot.AlignedData {
+  const xSet = new Set<number>();
+  for (const s of snapshots) {
+    if (!s) continue;
+    for (const x of s[0]) xSet.add(x);
+  }
+  const xs = Array.from(xSet).sort((a, b) => a - b);
+  const xsSec = xs.map((x) => x / 1000);
+  const out: number[][] = [xsSec];
+  for (const s of snapshots) {
+    if (!s) {
+      out.push(xs.map(() => NaN));
+      continue;
+    }
+    const ys: number[] = new Array(xs.length);
+    let idx = 0;
+    let last = NaN;
+    for (let i = 0; i < xs.length; i++) {
+      const x = xs[i];
+      while (idx < s[0].length && s[0][idx] <= x) {
+        last = s[1][idx];
+        idx += 1;
+      }
+      ys[i] = last;
+    }
+    out.push(ys);
+  }
+  return out as unknown as uPlot.AlignedData;
 }
 
 export function Plot({
@@ -39,25 +74,41 @@ export function Plot({
   onAddSeries,
   onRemoveSeries,
 }: Props) {
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const uplotRef = useRef<uPlot | null>(null);
   const [over, setOver] = useState(false);
 
-  // Memoize series shape for uPlot config rebuilds.
   const seriesSig = useMemo(() => plot.series.join("|"), [plot.series]);
 
-  // Rebuild uPlot whenever the series list changes or the container resizes.
+  // Width tracking for responsive plot.
+  const [width, setWidth] = useState(0);
   useEffect(() => {
-    if (!canvasRef.current) return;
-    const el = canvasRef.current;
-    if (plot.series.length === 0) {
-      uplotRef.current?.destroy();
-      uplotRef.current = null;
-      return;
-    }
+    const el = containerRef.current;
+    if (!el) return;
+    setWidth(el.clientWidth);
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Build / rebuild uPlot whenever the series list changes. Immediately
+  // populate from current buffer state so the user doesn't have to wait
+  // for the next poll tick to see anything.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    uplotRef.current?.destroy();
+    uplotRef.current = null;
+
+    if (plot.series.length === 0 || width === 0) return;
+
+    const accent = "#58a6ff";
+    const grid = getCssVar("--border") || "#30363d";
+    const stroke = getCssVar("--text-dim") || "#8b949e";
+
     const opts: uPlot.Options = {
-      width: el.clientWidth || 600,
-      height: el.clientHeight || 200,
+      width,
+      height: CANVAS_HEIGHT,
       pxAlign: false,
       cursor: { drag: { x: true, y: false }, points: { show: true } },
       scales: {
@@ -66,78 +117,45 @@ export function Plot({
       },
       axes: [
         {
-          stroke: "#8b949e",
-          grid: { stroke: "#30363d22" },
-          values: (_u, vals) => vals.map((v) => tsToHHMMSS(v * 1000)),
+          stroke,
+          grid: { stroke: grid, width: 0.5 },
+          ticks: { stroke: grid, width: 0.5 },
+          values: (_u, vals) => vals.map(tsLabel),
         },
         {
-          stroke: "#8b949e",
-          grid: { stroke: "#30363d22" },
+          stroke,
+          grid: { stroke: grid, width: 0.5 },
+          ticks: { stroke: grid, width: 0.5 },
         },
       ],
       series: [
-        { label: "ts" },
+        {},
         ...plot.series.map((path, i) => ({
           label: path,
-          stroke: COLORS[i % COLORS.length],
+          stroke: COLORS[i % COLORS.length] ?? accent,
           width: 1.5,
-          spanGaps: false,
+          spanGaps: true,
         })),
       ],
     };
-    const data: uPlot.AlignedData = [[], ...plot.series.map(() => [])] as uPlot.AlignedData;
-    uplotRef.current?.destroy();
-    uplotRef.current = new uPlot(opts, data, el);
 
-    const ro = new ResizeObserver(() => {
-      uplotRef.current?.setSize({
-        width: el.clientWidth,
-        height: el.clientHeight,
-      });
-    });
-    ro.observe(el);
+    const initial = alignData(plot.series.map((p) => buffers.get(p)?.snapshot()));
+    const u = new uPlot(opts, initial, el);
+    uplotRef.current = u;
+
     return () => {
-      ro.disconnect();
-      uplotRef.current?.destroy();
+      u.destroy();
       uplotRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seriesSig]);
+  }, [seriesSig, width]);
 
-  // Push new data every tick.
+  // Push fresh data on every tick.
   useEffect(() => {
-    if (!uplotRef.current || plot.series.length === 0) return;
-    // Find a unified x-axis by intersecting / unioning the timestamps. uPlot
-    // requires aligned data, so we union timestamps and emit each series'
-    // value at each timestamp (interpolating with the most-recent-known).
-    const snapshots = plot.series.map((p) => buffers.get(p)?.snapshot());
-    // Collect all x's.
-    const xSet = new Set<number>();
-    for (const s of snapshots) {
-      if (!s) continue;
-      for (const x of s[0]) xSet.add(x);
-    }
-    const xs = Array.from(xSet).sort((a, b) => a - b).map((x) => x / 1000);
-    const data: uPlot.AlignedData = [xs] as unknown as uPlot.AlignedData;
-    for (const s of snapshots) {
-      if (!s) {
-        (data as unknown as number[][]).push(xs.map(() => NaN));
-        continue;
-      }
-      const ys: number[] = [];
-      let idx = 0;
-      let last = NaN;
-      for (const x of xs) {
-        const xMs = x * 1000;
-        while (idx < s[0].length && s[0][idx] <= xMs) {
-          last = s[1][idx];
-          idx += 1;
-        }
-        ys.push(last);
-      }
-      (data as unknown as number[][]).push(ys);
-    }
-    uplotRef.current.setData(data);
+    const u = uplotRef.current;
+    if (!u || plot.series.length === 0) return;
+    const data = alignData(plot.series.map((p) => buffers.get(p)?.snapshot()));
+    u.setData(data);
   }, [tick, seriesSig, plot.series, buffers]);
 
   const onDragOver = (e: React.DragEvent) => {
@@ -163,7 +181,7 @@ export function Plot({
     >
       <div className="plot-header">
         <span className="title">{plot.title || `Plot`}</span>
-        <button className="danger" onClick={onRemove}>
+        <button className="danger" onClick={onRemove} title="Remove plot">
           ×
         </button>
       </div>
@@ -187,16 +205,25 @@ export function Plot({
                   {info.meta.units}
                 </span>
               )}
-              <span className="rm" onClick={() => onRemoveSeries(path)}>
+              <span className="rm" onClick={() => onRemoveSeries(path)} title="Remove">
                 ×
               </span>
             </span>
           );
         })}
       </div>
-      <div className="plot-canvas" ref={canvasRef}>
+      <div
+        className="plot-canvas"
+        ref={containerRef}
+        style={{ height: CANVAS_HEIGHT, width: "100%", overflow: "hidden" }}
+      >
         {plot.series.length === 0 && <div className="empty">empty</div>}
       </div>
     </div>
   );
+}
+
+function getCssVar(name: string): string {
+  if (typeof window === "undefined") return "";
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
