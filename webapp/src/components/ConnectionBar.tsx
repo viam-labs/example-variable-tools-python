@@ -73,13 +73,6 @@ export function ConnectionBar({
           : "disconnected";
   return (
     <div className="connbar">
-      <span
-        className="crumb"
-        style={{ color: "var(--text-dim)" }}
-        title="Webapp version (synced to the module's VERSION file at build time)"
-      >
-        v{__APP_VERSION__}
-      </span>
       <span className={`status-dot ${dotClass}`} title={status.state} />
       {host ? (
         <>
@@ -181,6 +174,13 @@ export function ConnectionBar({
       {status.state === "connected" && (
         <button onClick={onDisconnect}>Disconnect</button>
       )}
+      <span
+        className="crumb"
+        style={{ color: "var(--text-dim)", marginLeft: 4 }}
+        title="Webapp version (synced to the module's VERSION file at build time)"
+      >
+        v{__APP_VERSION__}
+      </span>
     </div>
   );
 }
