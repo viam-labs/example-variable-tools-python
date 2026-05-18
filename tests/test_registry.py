@@ -141,6 +141,35 @@ def test_registry_uses_default_separator_underscore():
     assert r.separator == "_"
 
 
+# ---- exists / get_or_none ---------------------------------------------------
+
+
+def test_exists_true_for_present_variable():
+    r = Registry("root")
+    pid = r.add_child("pid")
+    pid.add_double("kp", 5.0)
+    assert r.exists("pid_kp")
+    assert r.exists("pid.kp")  # backward-compat dot separator
+    assert pid.exists("kp")
+
+
+def test_exists_false_for_missing():
+    r = Registry("root")
+    r.add_child("pid").add_double("kp", 5.0)
+    assert not r.exists("pid_ki")
+    assert not r.exists("nope")
+    assert not r.exists("")
+
+
+def test_get_or_none_returns_variable_or_none():
+    r = Registry("root")
+    pid = r.add_child("pid")
+    kp = pid.add_double("kp", 5.0)
+    assert r.get_or_none("pid_kp") is kp
+    assert r.get_or_none("pid_missing") is None
+    assert r.get_or_none("") is None
+
+
 def test_name_collision_var_vs_var():
     r = Registry("root")
     r.add_double("x", 1.0)

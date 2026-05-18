@@ -119,6 +119,14 @@ message so you can paste the new value directly.
 - `__init__` builds the registry (now ~30 variables across controller,
   diagnostics, system, trajectory, pose, filtered_pose, filter), then
   attaches `SystemTiming` for the standard timing channels.
+- **The variables are grouped into channel classes** — `_PidGains`,
+  `_Diagnostics`, `_TrajectoryControls`, `_PoseChannel`, `_FilterParams`
+  — each takes a parent Registry on construction and exposes its
+  variables as typed public attributes. This is the recommended
+  user-facing pattern; the loop accesses everything as
+  `self._pid.kp.value`, `self._traj.start.value`, etc. — no per-tick
+  `Registry.get(path)` string lookups. Don't regress this in future
+  refactors; it's load-bearing for productizing the library.
 - `reconfigure` cancels any prior control-loop task, resets `self._t0`,
   resets trajectory state + filtered pose, starts a new `_loop()` task.
   Catches `RuntimeError` (no running loop) during tests/construction.

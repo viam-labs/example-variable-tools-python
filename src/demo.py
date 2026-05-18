@@ -1,22 +1,21 @@
 """``viam:example-variable-tools-python:demo`` — a Sensor that demonstrates
 ``variable_tools`` end-to-end.
 
-Builds a small hierarchical registry with a mix of types and tunability,
-then runs a 20 Hz background loop that:
+Demonstrates the recommended pattern for adopting the library: define
+small **channel classes** that own a child Registry and expose their
+variables as public attributes. This gives direct typed ref access
+(``self._pid.kp.value``) — no per-tick string lookup, IDE autocomplete,
+and refactor-safe rename. The same pattern is used by ``SystemTiming``
+in the library itself.
 
-  * mutates a few read-only diagnostic vars (counter, sine wave, periodic
-    boolean, enum state machine);
-  * advances a pose trajectory through waypoints with smoothstep timing
-    inside each segment, slerping orientation between waypoints so all
-    rotation axes vary visibly;
-  * applies a tunable 1st-order low-pass filter to the live pose so users
-    can tune the alphas from the scope and see the effect immediately.
-
-Pose uses translation x/y/z in millimetres + a unit quaternion
-(qw, qx, qy, qz). Quaternions interpolate cleanly across all rotation
-axes (slerp) — unlike the orientation-vector form which requires per-
-component lerp + renormalize and only animates well within a single
-fixed axis.
+The 20 Hz background loop:
+* updates diagnostic vars (counter, sine wave, periodic boolean, enum
+  state machine);
+* advances a 5-waypoint pose trajectory with smoothstep timing inside
+  each segment and slerp orientation between waypoints (so all four
+  quaternion components animate);
+* applies a 1st-order low-pass filter to the pose — translation lerps,
+  orientation slerps — with tunable alphas you can scope live.
 """
 import asyncio
 import math
@@ -48,8 +47,15 @@ TRAJ_STATES = ["idle", "running", "paused"]
 DEFAULT_TRAJECTORY_TIME_S = 8.0
 DEFAULT_ALPHA = 0.10
 
-# Pose = (x_mm, y_mm, z_mm, qw, qx, qy, qz). Unit quaternion.
+# (x_mm, y_mm, z_mm, qw, qx, qy, qz)
 Pose = Tuple[float, float, float, float, float, float, float]
+
+
+# =============================================================================
+# Pure math helpers — smoothstep timing, quaternion ops, trajectory eval.
+# These don't touch the registry; they're free functions so they can be
+# unit-tested without any module scaffolding.
+# =============================================================================
 
 
 def _smoothstep(t: float) -> float:
@@ -106,8 +112,7 @@ def _slerp(
 def _axis_angle_quat(
     axis: Tuple[float, float, float], angle_deg: float
 ) -> Tuple[float, float, float, float]:
-    """Build a unit quaternion (w, x, y, z) from a rotation axis and
-    angle in degrees. Axis is normalized internally."""
+    """Unit quaternion (w, x, y, z) from rotation axis + angle in degrees."""
     n = math.sqrt(axis[0] ** 2 + axis[1] ** 2 + axis[2] ** 2)
     if n < 1e-9:
         return (1.0, 0.0, 0.0, 0.0)
@@ -119,8 +124,6 @@ def _axis_angle_quat(
 
 # Waypoints expressed as ((x_mm, y_mm, z_mm), axis, angle_deg) — easier to
 # read than raw quaternions — then converted to (x, y, z, qw, qx, qy, qz).
-# Picked so successive segments rotate around different axes and translate
-# along different directions: orientation channels qx/qy/qz all vary.
 _WAYPOINTS_DEF: List[
     Tuple[Tuple[float, float, float], Tuple[float, float, float], float]
 ] = [
@@ -162,52 +165,54 @@ def _pose_at(t: float, total: float, waypoints: Sequence[Pose]) -> Pose:
     return (pos[0], pos[1], pos[2], q[0], q[1], q[2], q[3])
 
 
-class Demo(Sensor, EasyResource):
-    MODEL: ClassVar[Model] = Model(
-        ModelFamily("viam", "example-variable-tools-python"), "demo"
-    )
+# =============================================================================
+# Channel classes — the recommended pattern for grouping related variables.
+#
+# Each one takes a parent Registry, adds a child registry with its own
+# name, and exposes the typed Variable refs as public attributes. The
+# host code then holds the channel as `self._pid` etc. and writes /
+# reads via `self._pid.kp.value` — no per-tick string lookup, IDE
+# autocomplete on field names, and refactor-safe renames.
+#
+# Convention: snake_case Python attribute names mirror the camelCase
+# registry variable names (since the path separator is "_" and names
+# can't contain underscores, the wire-side has to be camelCase; the
+# Python side stays Pythonic).
+# =============================================================================
 
-    def __init__(self, name: str):
-        super().__init__(name)
-        self._registry = self._build_registry()
-        self._timing = SystemTiming(self._registry)
-        self._task: Optional[asyncio.Task] = None
-        self._t0 = time.monotonic()
-        self._traj_state: str = "idle"
-        self._traj_time: float = 0.0
-        self._last_loop_t: Optional[float] = None
-        self._filtered: Pose = WAYPOINTS[0]
 
-    @staticmethod
-    def _build_registry() -> Registry:
-        root = Registry("demo")
+class _PidGains:
+    """Standard PID gains: kp, ki."""
 
-        controller = root.add_child("controller")
-        pid = controller.add_child("pid")
-        pid.add_double(
+    def __init__(self, parent: Registry, name: str = "pid") -> None:
+        sub = parent.add_child(name)
+        self.kp = sub.add_double(
             "kp", 5.0, tunable=True, min=0.0, max=100.0, units="N/rad"
         )
-        pid.add_double(
+        self.ki = sub.add_double(
             "ki", 0.1, tunable=True, min=0.0, units="N/(rad*s)"
         )
-        controller.add_enum(
-            "state", "idle", list(dict.fromkeys(STATE_CYCLE)), tunable=True
-        )
 
-        # camelCase variable/registry names so they don't collide with the
-        # registry separator (default "_"). Full flattened keys read e.g.
-        # "diagnostics_loopCount", "trajectory_trajectoryTime".
-        diagnostics = root.add_child("diagnostics")
-        diagnostics.add_int("loopCount", 0)
-        diagnostics.add_bool("faultActive", False)
-        diagnostics.add_double("loopTimeMs", 0.0, units="ms")
 
-        # Trajectory controls + readout.
-        traj = root.add_child("trajectory")
-        traj.add_bool("start", False, tunable=True)
-        traj.add_bool("pause", False, tunable=True)
-        traj.add_bool("stop", False, tunable=True)
-        traj.add_double(
+class _Diagnostics:
+    """Counter + fault flag + sine-wave cycle time."""
+
+    def __init__(self, parent: Registry, name: str = "diagnostics") -> None:
+        sub = parent.add_child(name)
+        self.loop_count = sub.add_int("loopCount", 0)
+        self.fault_active = sub.add_bool("faultActive", False)
+        self.loop_time_ms = sub.add_double("loopTimeMs", 0.0, units="ms")
+
+
+class _TrajectoryControls:
+    """Triggers + duration + state for a trajectory player."""
+
+    def __init__(self, parent: Registry, name: str = "trajectory") -> None:
+        sub = parent.add_child(name)
+        self.start = sub.add_bool("start", False, tunable=True)
+        self.pause = sub.add_bool("pause", False, tunable=True)
+        self.stop = sub.add_bool("stop", False, tunable=True)
+        self.duration = sub.add_double(
             "trajectoryTime",
             DEFAULT_TRAJECTORY_TIME_S,
             tunable=True,
@@ -215,41 +220,46 @@ class Demo(Sensor, EasyResource):
             max=60.0,
             units="s",
         )
-        traj.add_double("timeInTrajectory", 0.0, units="s")
-        traj.add_enum("state", "idle", TRAJ_STATES)
+        self.elapsed = sub.add_double("timeInTrajectory", 0.0, units="s")
+        self.state = sub.add_enum("state", "idle", TRAJ_STATES)
 
-        # Live pose along the trajectory: translation + unit quaternion.
-        wp0 = WAYPOINTS[0]
-        pose = root.add_child("pose")
-        pose.add_double("x", wp0[0], units="mm")
-        pose.add_double("y", wp0[1], units="mm")
-        pose.add_double("z", wp0[2], units="mm")
-        pose.add_double("qw", wp0[3])
-        pose.add_double("qx", wp0[4])
-        pose.add_double("qy", wp0[5])
-        pose.add_double("qz", wp0[6])
 
-        # Filtered pose — same shape, low-pass-smoothed.
-        fp = root.add_child("filteredPose")
-        fp.add_double("x", wp0[0], units="mm")
-        fp.add_double("y", wp0[1], units="mm")
-        fp.add_double("z", wp0[2], units="mm")
-        fp.add_double("qw", wp0[3])
-        fp.add_double("qx", wp0[4])
-        fp.add_double("qy", wp0[5])
-        fp.add_double("qz", wp0[6])
+class _PoseChannel:
+    """7-component pose: translation (mm) + unit quaternion."""
 
-        # Filter alphas (per-tick low-pass coefficients). 1.0 = no filter,
-        # smaller = more smoothing / more lag.
-        f = root.add_child("filter")
-        f.add_double(
+    def __init__(self, parent: Registry, name: str, initial: Pose) -> None:
+        sub = parent.add_child(name)
+        self.x = sub.add_double("x", initial[0], units="mm")
+        self.y = sub.add_double("y", initial[1], units="mm")
+        self.z = sub.add_double("z", initial[2], units="mm")
+        self.qw = sub.add_double("qw", initial[3])
+        self.qx = sub.add_double("qx", initial[4])
+        self.qy = sub.add_double("qy", initial[5])
+        self.qz = sub.add_double("qz", initial[6])
+
+    def write(self, p: Pose) -> None:
+        self.x.value = p[0]
+        self.y.value = p[1]
+        self.z.value = p[2]
+        self.qw.value = p[3]
+        self.qx.value = p[4]
+        self.qy.value = p[5]
+        self.qz.value = p[6]
+
+
+class _FilterParams:
+    """Two tunable low-pass alphas — one for translation, one for orientation."""
+
+    def __init__(self, parent: Registry, name: str = "filter") -> None:
+        sub = parent.add_child(name)
+        self.alpha_translation = sub.add_double(
             "alphaTranslation",
             DEFAULT_ALPHA,
             tunable=True,
             min=0.001,
             max=1.0,
         )
-        f.add_double(
+        self.alpha_orientation = sub.add_double(
             "alphaOrientation",
             DEFAULT_ALPHA,
             tunable=True,
@@ -257,7 +267,43 @@ class Demo(Sensor, EasyResource):
             max=1.0,
         )
 
-        return root
+
+# =============================================================================
+# Demo Sensor
+# =============================================================================
+
+
+class Demo(Sensor, EasyResource):
+    MODEL: ClassVar[Model] = Model(
+        ModelFamily("viam", "example-variable-tools-python"), "demo"
+    )
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self._registry = Registry("demo")
+        # Library helper: adds a `system` child with epoch_s / uptime_s /
+        # loop_period_ms / loop_jitter_ms / tick_count.
+        self._timing = SystemTiming(self._registry)
+        # Per-feature channels (see classes above).
+        controller = self._registry.add_child("controller")
+        self._pid = _PidGains(controller)
+        self._ctrl_state = controller.add_enum(
+            "state", "idle", list(dict.fromkeys(STATE_CYCLE)), tunable=True
+        )
+        self._diag = _Diagnostics(self._registry)
+        self._traj = _TrajectoryControls(self._registry)
+        self._pose = _PoseChannel(self._registry, "pose", WAYPOINTS[0])
+        self._filtered = _PoseChannel(
+            self._registry, "filteredPose", WAYPOINTS[0]
+        )
+        self._filter = _FilterParams(self._registry)
+        # Runtime state — not registry-exposed, just internal bookkeeping.
+        self._task: Optional[asyncio.Task] = None
+        self._t0 = time.monotonic()
+        self._traj_state: str = "idle"
+        self._traj_time: float = 0.0
+        self._last_loop_t: Optional[float] = None
+        self._filtered_pose: Pose = WAYPOINTS[0]
 
     @classmethod
     def new(
@@ -287,83 +333,57 @@ class Demo(Sensor, EasyResource):
         self._traj_state = "idle"
         self._traj_time = 0.0
         self._last_loop_t = None
-        self._filtered = WAYPOINTS[0]
+        self._filtered_pose = WAYPOINTS[0]
         try:
             self._task = asyncio.create_task(self._loop())
         except RuntimeError:
             self._task = None
-            LOGGER.debug("no running event loop at reconfigure; loop will not start")
+            LOGGER.debug(
+                "no running event loop at reconfigure; loop will not start"
+            )
 
     async def _loop(self) -> None:
         interval = 1.0 / TICK_HZ
-        # All var lookups use the registry's separator ("_"). Registry.get
-        # also accepts "." for backward compat, but we use the canonical
-        # form here.
-        loop_count = self._registry.get("diagnostics_loopCount")
-        fault_active = self._registry.get("diagnostics_faultActive")
-        loop_time_ms = self._registry.get("diagnostics_loopTimeMs")
-        state_var = self._registry.get("controller_state")
-
-        traj_start = self._registry.get("trajectory_start")
-        traj_pause = self._registry.get("trajectory_pause")
-        traj_stop = self._registry.get("trajectory_stop")
-        traj_time_var = self._registry.get("trajectory_trajectoryTime")
-        traj_in = self._registry.get("trajectory_timeInTrajectory")
-        traj_state_var = self._registry.get("trajectory_state")
-
-        pose_x = self._registry.get("pose_x")
-        pose_y = self._registry.get("pose_y")
-        pose_z = self._registry.get("pose_z")
-        pose_qw = self._registry.get("pose_qw")
-        pose_qx = self._registry.get("pose_qx")
-        pose_qy = self._registry.get("pose_qy")
-        pose_qz = self._registry.get("pose_qz")
-
-        fp_x = self._registry.get("filteredPose_x")
-        fp_y = self._registry.get("filteredPose_y")
-        fp_z = self._registry.get("filteredPose_z")
-        fp_qw = self._registry.get("filteredPose_qw")
-        fp_qx = self._registry.get("filteredPose_qx")
-        fp_qy = self._registry.get("filteredPose_qy")
-        fp_qz = self._registry.get("filteredPose_qz")
-
-        alpha_t_var = self._registry.get("filter_alphaTranslation")
-        alpha_o_var = self._registry.get("filter_alphaOrientation")
-
         try:
             while True:
                 self._timing.tick()
                 t = time.monotonic() - self._t0
                 dt = (
-                    t - self._last_loop_t if self._last_loop_t is not None else interval
+                    t - self._last_loop_t
+                    if self._last_loop_t is not None
+                    else interval
                 )
                 self._last_loop_t = t
 
-                loop_count.value = loop_count.value + 1
-                loop_time_ms.value = 10.0 + 2.0 * math.sin(
+                # ---- Diagnostics ----
+                self._diag.loop_count.value = self._diag.loop_count.value + 1
+                self._diag.loop_time_ms.value = 10.0 + 2.0 * math.sin(
                     2 * math.pi * t / SINE_PERIOD_S
                 )
-                fault_active.value = (int(t / FAULT_PERIOD_S) % 2) == 1
+                self._diag.fault_active.value = (int(t / FAULT_PERIOD_S) % 2) == 1
                 idx = int(t / STATE_PERIOD_S) % len(STATE_CYCLE)
-                if state_var.value != STATE_CYCLE[idx]:
-                    state_var.value = STATE_CYCLE[idx]
+                if self._ctrl_state.value != STATE_CYCLE[idx]:
+                    self._ctrl_state.value = STATE_CYCLE[idx]
 
                 # ---- Trajectory state machine ----
-                if traj_stop.value:
+                # stop > start; both are momentary, cleared after handling.
+                if self._traj.stop.value:
                     self._traj_state = "idle"
                     self._traj_time = 0.0
-                    traj_stop.value = False
-                if traj_start.value:
+                    self._traj.stop.value = False
+                if self._traj.start.value:
                     if self._traj_state == "idle":
                         self._traj_time = 0.0
                     self._traj_state = "running"
-                    traj_start.value = False
-                if self._traj_state == "running" and traj_pause.value:
+                    self._traj.start.value = False
+                if self._traj_state == "running" and self._traj.pause.value:
                     self._traj_state = "paused"
-                elif self._traj_state == "paused" and not traj_pause.value:
+                elif (
+                    self._traj_state == "paused" and not self._traj.pause.value
+                ):
                     self._traj_state = "running"
 
-                total = max(0.001, traj_time_var.value)
+                total = max(0.001, self._traj.duration.value)
                 if self._traj_state == "running":
                     self._traj_time += dt
                     if self._traj_time >= total:
@@ -371,42 +391,30 @@ class Demo(Sensor, EasyResource):
                         self._traj_state = "idle"
 
                 target = _pose_at(self._traj_time, total, WAYPOINTS)
+                self._traj.elapsed.value = self._traj_time
+                if self._traj.state.value != self._traj_state:
+                    self._traj.state.value = self._traj_state
 
-                traj_in.value = self._traj_time
-                if traj_state_var.value != self._traj_state:
-                    traj_state_var.value = self._traj_state
+                # ---- Pose + filtered pose ----
+                self._pose.write(target)
 
-                pose_x.value = target[0]
-                pose_y.value = target[1]
-                pose_z.value = target[2]
-                pose_qw.value = target[3]
-                pose_qx.value = target[4]
-                pose_qy.value = target[5]
-                pose_qz.value = target[6]
-
-                # ---- 1st-order low-pass on the pose ----
-                # Translation: simple lerp per component.
-                # Orientation: slerp from filtered toward target by alpha.
-                a_t = max(0.0, min(1.0, alpha_t_var.value))
-                a_o = max(0.0, min(1.0, alpha_o_var.value))
-
-                fx = _lerp(self._filtered[0], target[0], a_t)
-                fy = _lerp(self._filtered[1], target[1], a_t)
-                fz = _lerp(self._filtered[2], target[2], a_t)
+                a_t = max(0.0, min(1.0, self._filter.alpha_translation.value))
+                a_o = max(0.0, min(1.0, self._filter.alpha_orientation.value))
+                fx = _lerp(self._filtered_pose[0], target[0], a_t)
+                fy = _lerp(self._filtered_pose[1], target[1], a_t)
+                fz = _lerp(self._filtered_pose[2], target[2], a_t)
                 fq = _slerp(
-                    (self._filtered[3], self._filtered[4], self._filtered[5], self._filtered[6]),
+                    (
+                        self._filtered_pose[3],
+                        self._filtered_pose[4],
+                        self._filtered_pose[5],
+                        self._filtered_pose[6],
+                    ),
                     (target[3], target[4], target[5], target[6]),
                     a_o,
                 )
-                self._filtered = (fx, fy, fz, fq[0], fq[1], fq[2], fq[3])
-
-                fp_x.value = self._filtered[0]
-                fp_y.value = self._filtered[1]
-                fp_z.value = self._filtered[2]
-                fp_qw.value = self._filtered[3]
-                fp_qx.value = self._filtered[4]
-                fp_qy.value = self._filtered[5]
-                fp_qz.value = self._filtered[6]
+                self._filtered_pose = (fx, fy, fz, fq[0], fq[1], fq[2], fq[3])
+                self._filtered.write(self._filtered_pose)
 
                 await asyncio.sleep(interval)
         except asyncio.CancelledError:

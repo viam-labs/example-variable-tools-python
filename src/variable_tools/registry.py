@@ -276,11 +276,22 @@ class Registry:
     def get(self, path: str) -> Variable:
         """Look up a variable by separator-joined path. Accepts either the
         registry's configured ``separator`` or ``.`` for backward compat.
-        Raises ``KeyError`` if missing."""
+        Raises ``KeyError`` if missing.
+
+        Prefer holding the Variable references returned by ``add_double``
+        etc. directly (e.g. in a small channel class) — string-based
+        lookups are weaker against typos and refactors. ``get`` is
+        useful for dynamic / generic code (e.g. ``handle_command``,
+        debugging consoles)."""
+        v = self.get_or_none(path)
+        if v is None:
+            raise KeyError(f"no such variable: {path}")
+        return v
+
+    def get_or_none(self, path: str) -> Optional[Variable]:
+        """Like ``get`` but returns ``None`` instead of raising."""
         if not isinstance(path, str) or not path:
-            raise KeyError(f"invalid path: {path!r}")
-        # Try the configured separator first; fall back to '.' so older
-        # callers using dotted paths still work.
+            return None
         seps = [self.separator]
         if "." not in seps:
             seps.append(".")
@@ -300,7 +311,11 @@ class Registry:
             last = parts[-1]
             if last in node._vars:
                 return node._vars[last]
-        raise KeyError(f"no such variable: {path}")
+        return None
+
+    def exists(self, path: str) -> bool:
+        """True if ``path`` resolves to a variable in this subtree."""
+        return self.get_or_none(path) is not None
 
     def flatten(self) -> Dict[str, Scalar]:
         """Flat ``{separator_joined_path: value}`` over the whole subtree.

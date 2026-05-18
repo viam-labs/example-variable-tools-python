@@ -17,6 +17,15 @@ from typing import Any, Mapping, Optional
 from .registry import Double, Enum, Integer, Registry
 
 
+def _schema_format_version() -> int:
+    # Local import to avoid a top-level circular reference between
+    # dispatch and the package __init__ (which re-exports
+    # SCHEMA_FORMAT_VERSION as part of the public surface).
+    from . import SCHEMA_FORMAT_VERSION
+
+    return SCHEMA_FORMAT_VERSION
+
+
 def handle_command(
     reg: Registry, command: Mapping[str, Any]
 ) -> Optional[Mapping[str, Any]]:
@@ -31,18 +40,21 @@ def handle_command(
             "values": reg.flatten(),
             "version": reg.effective_version(),
             "separator": reg.separator,
+            "schema_format_version": _schema_format_version(),
         }
     if verb == "vt.schema":
         return {
             "schema": reg.schema(),
             "version": reg.effective_version(),
             "separator": reg.separator,
+            "schema_format_version": _schema_format_version(),
         }
     if verb == "vt.paths":
         return {
             "paths": list(reg.flatten().keys()),
             "version": reg.effective_version(),
             "separator": reg.separator,
+            "schema_format_version": _schema_format_version(),
         }
     if verb == "vt.set":
         return _handle_set(reg, command)

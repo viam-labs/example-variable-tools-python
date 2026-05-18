@@ -21,20 +21,10 @@ from src.demo import (
 
 
 def _make_demo() -> Demo:
-    """Construct a Demo without the framework lifecycle. Registry is built
-    in __init__ but no asyncio task starts."""
-    from src.variable_tools import SystemTiming
-
-    d = Demo.__new__(Demo)
-    d._registry = Demo._build_registry()
-    d._timing = SystemTiming(d._registry)
-    d._task = None
-    d._t0 = 0.0
-    d._traj_state = "idle"
-    d._traj_time = 0.0
-    d._last_loop_t = None
-    d._filtered = WAYPOINTS[0]
-    return d
+    """Construct a Demo without the framework lifecycle. The control loop
+    starts in ``reconfigure`` (which we don't call), so ``__init__`` is
+    safe to invoke directly here."""
+    return Demo("test-demo")
 
 
 def test_registry_has_expected_controller_diagnostics_paths():

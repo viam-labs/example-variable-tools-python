@@ -46,22 +46,39 @@ webapp/                              ← Vite + React + uPlot SCS-style scope
 
 The library isn't on PyPI yet (see `PUBLISHING.md`). To use it today, copy
 `src/variable_tools/` from this repo into your own module's `src/` directory
-— the package is pure Python with no external dependencies. Then:
+— the package is pure Python with no external dependencies.
+
+**Recommended pattern: channel classes.** Each ``add_double`` / ``add_int``
+/ ``add_bool`` / ``add_enum`` call returns a typed reference; hold those
+refs in small wrapper classes rather than re-fetching by string each tick.
+Direct attribute access gives you IDE autocomplete, mypy-checked typos,
+refactor-safe renames, and no per-tick path lookup. The library's
+``SystemTiming`` is itself an example.
 
 ```python
 from .variable_tools import Registry, SystemTiming, handle_command
+
+
+class PidGains:
+    """Group related variables into a small class that takes a parent
+    Registry on construction and exposes typed refs as attributes."""
+
+    def __init__(self, parent: Registry, name: str = "pid"):
+        sub = parent.add_child(name)
+        self.kp = sub.add_double("kp", 5.0, tunable=True, min=0.0, max=100.0)
+        self.ki = sub.add_double("ki", 0.1, tunable=True, min=0.0)
 
 
 class MyArm(Arm, EasyResource):
     def __init__(self, name):
         super().__init__(name)
         self._registry = Registry("my_arm")
-        # Standard timing channels — optional but free.
+        # Free standard timing channels — system.epochS, uptimeS,
+        # loopPeriodMs, loopJitterMs, tickCount.
         self._timing = SystemTiming(self._registry)
-        # Your own variables.
-        pid = self._registry.add_child("pid")
-        self._kp = pid.add_double("kp", 5.0, tunable=True, min=0.0, max=100.0)
-        self._loop_count = self._registry.add_int("loop_count", 0)
+        # Your own grouped channels.
+        self._pid = PidGains(self._registry)
+        self._diag_count = self._registry.add_int("loopCount", 0)
 
     async def do_command(self, command, **kwargs):
         # Library handles vt.* verbs; everything else falls through.
@@ -72,17 +89,39 @@ class MyArm(Arm, EasyResource):
 
     # In your control loop:
     #   self._timing.tick()                              # update system.*
-    #   self._loop_count.value = self._loop_count.value + 1
-    #   self._kp.value = 6.0                              # in-process, no IPC
+    #   self._diag_count.value = self._diag_count.value + 1
+    #   self._pid.kp.value = 6.0     # direct, type-safe, no string lookup
 ```
 
-If your module already uses `Sensor`, also wire `get_readings` to the
-registry so it's captured by the data manager and visible in the scope:
+If your module already inherits from `Sensor`, also wire `get_readings`
+to the registry so it's captured by the data manager and visible in the
+scope:
 
 ```python
 async def get_readings(self, **kwargs):
     return self._registry.flatten()
 ```
+
+**Anti-pattern to avoid.** Building the registry in a helper that
+discards the returned refs, then re-fetching by string in your loop:
+
+```python
+# Don't do this — fragile, no IDE autocomplete, no rename safety.
+def _build(self):
+    self._reg.add_child("pid").add_double("kp", 5.0, tunable=True, ...)
+    self._reg.add_int("loopCount", 0)
+
+async def _loop(self):
+    kp = self._reg.get("pid_kp")          # weak string lookup every loop
+    counter = self._reg.get("loopCount")
+    while True:
+        counter.value += 1
+        ...
+```
+
+The library's ``Registry.get`` / ``get_or_none`` / ``exists`` are still
+there for generic / dynamic code (dispatch, debugging consoles), but
+holding direct refs is what you want for control loops.
 
 ## Settable vs state — one flag
 

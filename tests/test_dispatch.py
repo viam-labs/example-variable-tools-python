@@ -39,6 +39,17 @@ def test_vt_dump():
     }
     assert isinstance(resp["version"], int)
     assert resp["version"] >= 1
+    assert resp["separator"] == "_"
+    assert isinstance(resp["schema_format_version"], int)
+
+
+def test_vt_schema_includes_schema_format_version():
+    from src.variable_tools import SCHEMA_FORMAT_VERSION
+
+    r = _build_registry()
+    resp = handle_command(r, {"command": "vt.schema"})
+    assert resp is not None
+    assert resp["schema_format_version"] == SCHEMA_FORMAT_VERSION
 
 
 def test_vt_schema_shape():
