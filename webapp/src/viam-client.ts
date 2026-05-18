@@ -33,6 +33,9 @@ export interface ConnectedSession {
    * aggregator (its dump already returns prefixed keys), false for direct
    * (a direct sensor's keys are local). */
   prefixWithSource: boolean;
+  /** Path separator reported by the server. v0.0.8+ defaults to "_";
+   * older modules used "." — we accept either. */
+  separator: string;
 }
 
 export async function connect(
@@ -52,14 +55,26 @@ export async function connect(
   });
   const sensor = new SensorClient(client, cfg.resource);
 
-  const { mode, schemas, prefixWithSource } = await probeSchema(sensor, cfg);
+  const { mode, schemas, prefixWithSource, separator } = await probeSchema(
+    sensor,
+    cfg,
+  );
   const paths: PathInfo[] = [];
   for (const [source, tree] of Object.entries(schemas)) {
-    paths.push(...flattenSchema(source, tree, prefixWithSource));
+    paths.push(...flattenSchema(source, tree, prefixWithSource, separator));
   }
   paths.sort((a, b) => a.fullPath.localeCompare(b.fullPath));
 
-  return { client, sensor, config: cfg, paths, schemas, mode, prefixWithSource };
+  return {
+    client,
+    sensor,
+    config: cfg,
+    paths,
+    schemas,
+    mode,
+    prefixWithSource,
+    separator,
+  };
 }
 
 async function probeSchema(
@@ -69,34 +84,64 @@ async function probeSchema(
   mode: "aggregator" | "direct";
   schemas: Record<string, SchemaTreeNode>;
   prefixWithSource: boolean;
+  separator: string;
 }> {
-  const tryAggregator = async () => {
-    const resp = await sensor.doCommand(Struct.fromJson({ command: "vt.schema_all" }));
+  const tryAggregator = async (): Promise<{
+    schemas: Record<string, SchemaTreeNode>;
+    separator: string;
+  } | null> => {
+    const resp = await sensor.doCommand(
+      Struct.fromJson({ command: "vt.schema_all" }),
+    );
     const obj = resp as unknown as Record<string, unknown>;
     const raw = obj?.schemas as
-      | Record<string, { schema: SchemaTreeNode }>
+      | Record<string, { schema: SchemaTreeNode; separator?: string }>
       | undefined;
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     const schemas: Record<string, SchemaTreeNode> = {};
+    let depSep: string | undefined;
     for (const [name, entry] of Object.entries(raw)) {
       if (entry && typeof entry === "object" && "schema" in entry) {
         schemas[name] = (entry as { schema: SchemaTreeNode }).schema;
+        if (!depSep && typeof entry.separator === "string") {
+          depSep = entry.separator;
+        }
       }
     }
     if (Object.keys(schemas).length === 0) return null;
-    return schemas;
+    const aggSep =
+      (typeof obj.separator === "string" ? (obj.separator as string) : undefined) ??
+      depSep ??
+      "_";
+    return { schemas, separator: aggSep };
   };
-  const tryDirect = async () => {
-    const resp = await sensor.doCommand(Struct.fromJson({ command: "vt.schema" }));
+  const tryDirect = async (): Promise<{
+    schemas: Record<string, SchemaTreeNode>;
+    separator: string;
+  } | null> => {
+    const resp = await sensor.doCommand(
+      Struct.fromJson({ command: "vt.schema" }),
+    );
     const obj = resp as unknown as Record<string, unknown>;
     const schema = obj?.schema as SchemaTreeNode | undefined;
-    if (!schema || typeof schema !== "object" || Array.isArray(schema)) return null;
-    return { [cfg.resource]: schema };
+    if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+      return null;
+    }
+    const sep =
+      typeof obj.separator === "string" ? (obj.separator as string) : "_";
+    return { schemas: { [cfg.resource]: schema }, separator: sep };
   };
 
   if (cfg.mode === "aggregator" || cfg.mode === "auto") {
     const agg = await tryAggregator().catch(() => null);
-    if (agg) return { mode: "aggregator", schemas: agg, prefixWithSource: true };
+    if (agg) {
+      return {
+        mode: "aggregator",
+        schemas: agg.schemas,
+        prefixWithSource: true,
+        separator: agg.separator,
+      };
+    }
     if (cfg.mode === "aggregator") {
       throw new Error("resource did not respond to vt.schema_all");
     }
@@ -105,7 +150,12 @@ async function probeSchema(
     throw new Error(`resource did not respond to vt.schema: ${e}`);
   });
   if (!direct) throw new Error("resource returned no schema");
-  return { mode: "direct", schemas: direct, prefixWithSource: false };
+  return {
+    mode: "direct",
+    schemas: direct.schemas,
+    prefixWithSource: false,
+    separator: direct.separator,
+  };
 }
 
 /** Fetch current values via Sensor.getReadings — works uniformly for both
@@ -126,7 +176,7 @@ export async function dump(
   if (session.prefixWithSource) return values;
   const out: Record<string, Scalar> = {};
   for (const [k, v] of Object.entries(values)) {
-    out[`${session.config.resource}.${k}`] = v;
+    out[`${session.config.resource}${session.separator}${k}`] = v;
   }
   return out;
 }
@@ -141,7 +191,7 @@ export async function setValue(
   value: Scalar,
 ): Promise<{ ok: boolean; error?: string; previous?: Scalar }> {
   const path = session.prefixWithSource
-    ? `${info.source}.${info.localPath}`
+    ? `${info.source}${session.separator}${info.localPath}`
     : info.localPath;
   const resp = (await session.sensor.doCommand(
     Struct.fromJson({ command: "vt.set", path, value: value as never }),

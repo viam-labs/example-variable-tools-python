@@ -1,17 +1,21 @@
 import type { PathInfo, SchemaTreeNode, Scalar, VariableMeta } from "../types";
 
 /** Walk a single source's schema tree into a flat list of PathInfo, prefixed
- * with `source` when `prefixWithSource` is true (aggregator mode). */
+ * with `source` when `prefixWithSource` is true (aggregator mode). The
+ * registry-level path separator is reported by the server in the schema
+ * response (default ``_`` as of v0.0.8). Falls back to ``.`` for older
+ * servers. */
 export function flattenSchema(
   source: string,
   tree: SchemaTreeNode,
   prefixWithSource: boolean,
+  separator: string = "_",
 ): PathInfo[] {
   const out: PathInfo[] = [];
   const walk = (node: SchemaTreeNode, registryPath: string): void => {
     for (const v of node.variables) {
-      const localPath = registryPath ? `${registryPath}.${v.name}` : v.name;
-      const fullPath = prefixWithSource ? `${source}.${localPath}` : localPath;
+      const localPath = registryPath ? `${registryPath}${separator}${v.name}` : v.name;
+      const fullPath = prefixWithSource ? `${source}${separator}${localPath}` : localPath;
       out.push({
         fullPath,
         localPath,
@@ -21,7 +25,7 @@ export function flattenSchema(
       });
     }
     for (const c of node.children) {
-      const next = registryPath ? `${registryPath}.${c.name}` : c.name;
+      const next = registryPath ? `${registryPath}${separator}${c.name}` : c.name;
       walk(c, next);
     }
   };

@@ -65,6 +65,10 @@ class Aggregator(Sensor, EasyResource):
         self._deps: Dict[str, ResourceBase] = {}
         self._schemas: Dict[str, Any] = {}
         self._prefix_with_name: bool = True
+        # Separator used to join the source-name prefix with each dep's
+        # flattened key. Mirrors the registry-level separator. Defaulted
+        # to "_" (datastore-friendly) in 0.0.8.
+        self._separator: str = "_"
 
     @classmethod
     def new(
@@ -177,7 +181,9 @@ class Aggregator(Sensor, EasyResource):
                     )
                     self._schemas.pop(name, None)
             for k, v in values.items():
-                key = f"{name}.{k}" if self._prefix_with_name else k
+                key = (
+                    f"{name}{self._separator}{k}" if self._prefix_with_name else k
+                )
                 out[key] = v
         return out
 
@@ -191,13 +197,16 @@ class Aggregator(Sensor, EasyResource):
         verb = command.get("command") if isinstance(command, Mapping) else None
         if verb == "vt.schema_all":
             await self._refresh_schemas()
-            return {"schemas": dict(self._schemas)}
+            return {
+                "schemas": dict(self._schemas),
+                "separator": self._separator,
+            }
         if verb == "vt.dump":
             # Delegate to the same fan-out used by get_readings, so the
             # verb-based path works for clients that don't differentiate
             # between aggregator and direct mode.
             values = await self.get_readings()
-            return {"values": dict(values)}
+            return {"values": dict(values), "separator": self._separator}
         if verb == "vt.set":
             return await self._route_set(command)
         return {}
@@ -208,10 +217,24 @@ class Aggregator(Sensor, EasyResource):
         path = command.get("path")
         if not isinstance(path, str) or not path:
             return {"ok": False, "error": "wrong_type"}
-        head, sep, rest = path.partition(".")
-        if not sep or not rest:
-            return {"ok": False, "error": "unknown_variable"}
-        dep = self._deps.get(head)
+        # Route by source prefix. Try the configured separator first; if
+        # the resulting head isn't a known dep, fall back to "." (older
+        # clients on the pre-0.0.8 wire format). Whichever split yields a
+        # known dep wins.
+        candidates = [self._separator]
+        if "." not in candidates:
+            candidates.append(".")
+        dep = None
+        head: str = ""
+        rest: str = ""
+        for sep_char in candidates:
+            h, s, r = path.partition(sep_char)
+            if not s or not r:
+                continue
+            d = self._deps.get(h)
+            if d is not None:
+                dep, head, rest = d, h, r
+                break
         if dep is None:
             return {"ok": False, "error": "unknown_variable"}
         return await dep.do_command(

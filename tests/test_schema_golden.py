@@ -17,9 +17,9 @@ def _build_golden_registry() -> Registry:
     pid.add_double("ki", 0.1, tunable=True, min=0.0)
     ctrl.add_enum("state", "idle", ["idle", "moving", "fault"], tunable=True)
     diag = r.add_child("diagnostics")
-    diag.add_int("loop_count", 0)
-    diag.add_bool("fault_active", False)
-    diag.add_double("loop_time_ms", 0.0, units="ms")
+    diag.add_int("loopCount", 0)
+    diag.add_bool("faultActive", False)
+    diag.add_double("loopTimeMs", 0.0, units="ms")
     return r
 
 
@@ -40,9 +40,9 @@ GOLDEN = (
     '{"cases": ["idle", "moving", "fault"], "name": "state", "tunable": true, "type": "enum"}'
     '], "version": 2}, '
     '{"children": [], "name": "diagnostics", "variables": ['
-    '{"name": "loop_count", "tunable": false, "type": "integer"}, '
-    '{"name": "fault_active", "tunable": false, "type": "boolean"}, '
-    '{"name": "loop_time_ms", "tunable": false, "type": "double", "units": "ms"}'
+    '{"name": "loopCount", "tunable": false, "type": "integer"}, '
+    '{"name": "faultActive", "tunable": false, "type": "boolean"}, '
+    '{"name": "loopTimeMs", "tunable": false, "type": "double", "units": "ms"}'
     '], "version": 3}'
     '], '
     '"name": "golden", '

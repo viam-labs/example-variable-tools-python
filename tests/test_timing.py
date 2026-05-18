@@ -14,11 +14,11 @@ def test_attaches_system_child_with_expected_vars():
     r = Registry("root")
     SystemTiming(r)
     flat = r.flatten()
-    assert "system.epoch_s" in flat
-    assert "system.uptime_s" in flat
-    assert "system.loop_period_ms" in flat
-    assert "system.loop_jitter_ms" in flat
-    assert "system.tick_count" in flat
+    assert "system_epochS" in flat
+    assert "system_uptimeS" in flat
+    assert "system_loopPeriodMs" in flat
+    assert "system_loopJitterMs" in flat
+    assert "system_tickCount" in flat
 
 
 def test_first_tick_increments_count_no_period_yet(monkeypatch):
@@ -28,10 +28,10 @@ def test_first_tick_increments_count_no_period_yet(monkeypatch):
     t = SystemTiming(r)
     monkeypatch.setattr("src.variable_tools.timing.time.monotonic", lambda: 100.05)
     t.tick()
-    assert r.get("system.tick_count").value == 1
-    assert r.get("system.uptime_s").value == pytest.approx(0.05)
+    assert r.get("system_tickCount").value == 1
+    assert r.get("system_uptimeS").value == pytest.approx(0.05)
     # No previous tick → period stays 0.
-    assert r.get("system.loop_period_ms").value == 0.0
+    assert r.get("system_loopPeriodMs").value == 0.0
 
 
 def test_second_tick_records_period(monkeypatch):
@@ -43,8 +43,8 @@ def test_second_tick_records_period(monkeypatch):
     t.tick()
     monkeypatch.setattr("src.variable_tools.timing.time.monotonic", lambda: 100.10)
     t.tick()
-    assert r.get("system.loop_period_ms").value == pytest.approx(50.0)
-    assert r.get("system.tick_count").value == 2
+    assert r.get("system_loopPeriodMs").value == pytest.approx(50.0)
+    assert r.get("system_tickCount").value == 2
 
 
 def test_jitter_zero_for_constant_intervals(monkeypatch):
@@ -55,7 +55,7 @@ def test_jitter_zero_for_constant_intervals(monkeypatch):
     t = SystemTiming(r)
     for _ in range(4):
         t.tick()
-    assert r.get("system.loop_jitter_ms").value == pytest.approx(0.0, abs=1e-9)
+    assert r.get("system_loopJitterMs").value == pytest.approx(0.0, abs=1e-9)
 
 
 def test_jitter_positive_for_varying_intervals(monkeypatch):
@@ -72,7 +72,7 @@ def test_jitter_positive_for_varying_intervals(monkeypatch):
     mean = sum(intervals_ms) / len(intervals_ms)
     var = sum((x - mean) ** 2 for x in intervals_ms) / len(intervals_ms)
     expected = math.sqrt(var)
-    assert r.get("system.loop_jitter_ms").value == pytest.approx(expected, rel=1e-6)
+    assert r.get("system_loopJitterMs").value == pytest.approx(expected, rel=1e-6)
 
 
 def test_reset_clears_intervals_and_uptime(monkeypatch):
@@ -84,12 +84,12 @@ def test_reset_clears_intervals_and_uptime(monkeypatch):
     t.tick()
     monkeypatch.setattr("src.variable_tools.timing.time.monotonic", lambda: 120.0)
     t.tick()
-    assert r.get("system.loop_period_ms").value > 0
+    assert r.get("system_loopPeriodMs").value > 0
     monkeypatch.setattr("src.variable_tools.timing.time.monotonic", lambda: 200.0)
     t.reset()
-    assert r.get("system.uptime_s").value == 0.0
-    assert r.get("system.loop_period_ms").value == 0.0
-    assert r.get("system.loop_jitter_ms").value == 0.0
+    assert r.get("system_uptimeS").value == 0.0
+    assert r.get("system_loopPeriodMs").value == 0.0
+    assert r.get("system_loopJitterMs").value == 0.0
 
 
 def test_jitter_window_too_small_rejected():
@@ -102,11 +102,11 @@ def test_system_vars_are_not_tunable():
     r = Registry("root")
     SystemTiming(r)
     for path in [
-        "system.epoch_s",
-        "system.uptime_s",
-        "system.loop_period_ms",
-        "system.loop_jitter_ms",
-        "system.tick_count",
+        "system_epochS",
+        "system_uptimeS",
+        "system_loopPeriodMs",
+        "system_loopJitterMs",
+        "system_tickCount",
     ]:
         assert r.get(path).tunable is False
 

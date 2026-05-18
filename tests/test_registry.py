@@ -32,7 +32,7 @@ def test_flatten_nested():
     diag = r.add_child("diag")
     diag.add_int("loops", 7)
     out = r.flatten()
-    assert out == {"pid.kp": 5.0, "pid.ki": 0.1, "diag.loops": 7}
+    assert out == {"pid_kp": 5.0, "pid_ki": 0.1, "diag_loops": 7}
 
 
 def test_deeply_nested():
@@ -40,7 +40,7 @@ def test_deeply_nested():
     b = r.add_child("b")
     c = b.add_child("c")
     c.add_bool("flag", True)
-    assert r.flatten() == {"b.c.flag": True}
+    assert r.flatten() == {"b_c_flag": True}
 
 
 def test_version_bumps_on_add():
@@ -68,7 +68,7 @@ def test_get_variable_by_path():
     r = Registry("root")
     pid = r.add_child("pid")
     var = pid.add_double("kp", 5.0)
-    assert r.get("pid.kp") is var
+    assert r.get("pid_kp") is var
 
 
 def test_get_top_level_variable():
@@ -81,7 +81,7 @@ def test_get_missing_raises_key_error():
     r = Registry("root")
     r.add_child("pid").add_double("kp", 5.0)
     with pytest.raises(KeyError):
-        r.get("pid.ki")
+        r.get("pid_ki")
     with pytest.raises(KeyError):
         r.get("nope")
     with pytest.raises(KeyError):
@@ -107,10 +107,38 @@ def test_name_validation_rejects_invalid(bad):
         r.add_child(bad)
 
 
-@pytest.mark.parametrize("good", ["a", "Z", "snake_case", "kebab-case", "x1", "_x"])
+@pytest.mark.parametrize("good", ["a", "Z", "camelCase", "kebab-case", "x1"])
 def test_name_validation_accepts_valid(good):
     r = Registry("root")
     r.add_double(good, 1.0)
+
+
+def test_name_with_separator_rejected():
+    """The separator (default ``_``) is reserved as a path joiner and
+    cannot appear in variable or registry names — otherwise flattened
+    keys would be ambiguous (``a_b`` could mean ``a > b`` or a single
+    variable named ``a_b``)."""
+    r = Registry("root")
+    with pytest.raises(ValueError, match="separator"):
+        r.add_double("snake_case", 1.0)
+    with pytest.raises(ValueError, match="separator"):
+        r.add_child("foo_bar")
+
+
+def test_separator_dot_allows_underscores_in_names():
+    """Backward-compat path: with separator='.', underscored names work
+    again (the old behavior through 0.0.7)."""
+    r = Registry("root", separator=".")
+    r.add_double("snake_case", 1.0)
+    child = r.add_child("foo_bar")
+    child.add_int("count", 0)
+    assert r.flatten() == {"snake_case": 1.0, "foo_bar.count": 0}
+    assert r.get("foo_bar.count").value == 0
+
+
+def test_registry_uses_default_separator_underscore():
+    r = Registry("root")
+    assert r.separator == "_"
 
 
 def test_name_collision_var_vs_var():

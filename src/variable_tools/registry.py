@@ -14,7 +14,19 @@ import re
 from typing import Any, Dict, Optional, Sequence, Union
 
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-PATH_SEP = "."
+
+# Default separator joining registry levels in flattened paths. Chosen as
+# the single character that's safe everywhere without quoting — BigQuery
+# columns, MATLAB identifiers, Parquet/Arrow, MCAP topics all accept it
+# bare. Was "." in 0.0.7 and earlier; switched in 0.0.8 because the Viam
+# data manager / cloud datastore treats keys with "." as nested JSON
+# paths or rejects them outright.
+DEFAULT_PATH_SEP = "_"
+
+# Backward-compat shim — some downstream code (and tests) import PATH_SEP.
+# Reflects the package default. Don't rely on it for per-registry sep
+# handling; read ``Registry.separator`` instead.
+PATH_SEP = DEFAULT_PATH_SEP
 
 Scalar = Union[float, bool, int, str]
 
@@ -196,17 +208,32 @@ class Registry:
     Insertion order is preserved for both. Names of variables and child
     registries share a single namespace (no var named ``foo`` plus child
     named ``foo``). ``_version`` increments on every successful add.
+
+    ``separator`` is the character that joins registry levels in flattened
+    paths emitted by :meth:`flatten` and reported in the dispatch verbs.
+    Defaults to ``_`` (BigQuery/MATLAB/Parquet/MCAP-friendly without
+    quoting). Children inherit the parent's separator on
+    :meth:`add_child`. Path lookups via :meth:`get` accept either the
+    configured separator or ``.`` for backward compat.
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, *, separator: str = DEFAULT_PATH_SEP):
         _validate_name(name)
+        if not isinstance(separator, str) or len(separator) != 1:
+            raise ValueError("separator must be a single character")
         self.name = name
+        self.separator = separator
         self._version: int = 0
         self._vars: Dict[str, Variable] = {}
         self._children: Dict[str, "Registry"] = {}
 
     def _check_free(self, name: str) -> None:
         _validate_name(name)
+        if self.separator in name:
+            raise ValueError(
+                f"invalid name {name!r}: cannot contain the registry separator "
+                f"{self.separator!r}; rename without the separator (e.g. camelCase)"
+            )
         if name in self._vars or name in self._children:
             raise ValueError(
                 f"name collision: {name!r} already exists in registry {self.name!r}"
@@ -241,30 +268,42 @@ class Registry:
 
     def add_child(self, name: str) -> "Registry":
         self._check_free(name)
-        child = Registry(name)
+        child = Registry(name, separator=self.separator)
         self._children[name] = child
         self._version += 1
         return child
 
     def get(self, path: str) -> Variable:
-        """Look up a variable by dotted path. Raises ``KeyError`` if missing."""
+        """Look up a variable by separator-joined path. Accepts either the
+        registry's configured ``separator`` or ``.`` for backward compat.
+        Raises ``KeyError`` if missing."""
         if not isinstance(path, str) or not path:
             raise KeyError(f"invalid path: {path!r}")
-        parts = path.split(PATH_SEP)
-        if any(not p for p in parts):
-            raise KeyError(f"invalid path: {path!r}")
-        node = self
-        for i, p in enumerate(parts[:-1]):
-            if p not in node._children:
-                raise KeyError(f"no such registry: {PATH_SEP.join(parts[: i + 1])}")
-            node = node._children[p]
-        last = parts[-1]
-        if last not in node._vars:
-            raise KeyError(f"no such variable: {path}")
-        return node._vars[last]
+        # Try the configured separator first; fall back to '.' so older
+        # callers using dotted paths still work.
+        seps = [self.separator]
+        if "." not in seps:
+            seps.append(".")
+        for sep in seps:
+            parts = path.split(sep)
+            if any(not p for p in parts):
+                continue
+            node = self
+            ok = True
+            for p in parts[:-1]:
+                if p not in node._children:
+                    ok = False
+                    break
+                node = node._children[p]
+            if not ok:
+                continue
+            last = parts[-1]
+            if last in node._vars:
+                return node._vars[last]
+        raise KeyError(f"no such variable: {path}")
 
     def flatten(self) -> Dict[str, Scalar]:
-        """Flat ``{dotted_path: value}`` over the whole subtree.
+        """Flat ``{separator_joined_path: value}`` over the whole subtree.
 
         The Registry's own name is NOT included in returned paths — callers
         (typically the aggregator) prefix with the resource name themselves.
@@ -277,7 +316,7 @@ class Registry:
         for vname, var in self._vars.items():
             out[f"{prefix}{vname}"] = var.value
         for cname, child in self._children.items():
-            child._flatten_into(out, f"{prefix}{cname}{PATH_SEP}")
+            child._flatten_into(out, f"{prefix}{cname}{self.separator}")
 
     def effective_version(self) -> int:
         """Max ``_version`` across this Registry and all descendants."""

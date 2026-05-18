@@ -32,11 +32,14 @@ class SystemTiming:
         self._t0 = time.monotonic()
 
         sys = registry.add_child("system")
-        self._epoch = sys.add_double("epoch_s", time.time(), units="s")
-        self._uptime = sys.add_double("uptime_s", 0.0, units="s")
-        self._period = sys.add_double("loop_period_ms", 0.0, units="ms")
-        self._jitter = sys.add_double("loop_jitter_ms", 0.0, units="ms")
-        self._count = sys.add_int("tick_count", 0)
+        # Variable names are camelCase so they don't conflict with the
+        # registry's path separator (default "_"). Full keys read as e.g.
+        # "system_epochS", "system_loopPeriodMs".
+        self._epoch = sys.add_double("epochS", time.time(), units="s")
+        self._uptime = sys.add_double("uptimeS", 0.0, units="s")
+        self._period = sys.add_double("loopPeriodMs", 0.0, units="ms")
+        self._jitter = sys.add_double("loopJitterMs", 0.0, units="ms")
+        self._count = sys.add_int("tickCount", 0)
 
     def tick(self) -> None:
         now = time.monotonic()

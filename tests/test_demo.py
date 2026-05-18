@@ -41,12 +41,12 @@ def test_registry_has_expected_controller_diagnostics_paths():
     d = _make_demo()
     flat = set(d._registry.flatten().keys())
     expected_subset = {
-        "controller.pid.kp",
-        "controller.pid.ki",
-        "controller.state",
-        "diagnostics.loop_count",
-        "diagnostics.fault_active",
-        "diagnostics.loop_time_ms",
+        "controller_pid_kp",
+        "controller_pid_ki",
+        "controller_state",
+        "diagnostics_loopCount",
+        "diagnostics_faultActive",
+        "diagnostics_loopTimeMs",
     }
     assert expected_subset <= flat
 
@@ -54,37 +54,37 @@ def test_registry_has_expected_controller_diagnostics_paths():
 def test_registry_has_system_timing_paths():
     d = _make_demo()
     flat = d._registry.flatten()
-    assert "system.epoch_s" in flat
-    assert "system.uptime_s" in flat
-    assert "system.loop_period_ms" in flat
-    assert "system.loop_jitter_ms" in flat
-    assert "system.tick_count" in flat
+    assert "system_epochS" in flat
+    assert "system_uptimeS" in flat
+    assert "system_loopPeriodMs" in flat
+    assert "system_loopJitterMs" in flat
+    assert "system_tickCount" in flat
 
 
 def test_initial_values():
     d = _make_demo()
     flat = d._registry.flatten()
-    assert flat["controller.pid.kp"] == 5.0
-    assert flat["controller.pid.ki"] == 0.1
-    assert flat["controller.state"] == "idle"
-    assert flat["diagnostics.loop_count"] == 0
-    assert flat["diagnostics.fault_active"] is False
-    assert flat["diagnostics.loop_time_ms"] == 0.0
+    assert flat["controller_pid_kp"] == 5.0
+    assert flat["controller_pid_ki"] == 0.1
+    assert flat["controller_state"] == "idle"
+    assert flat["diagnostics_loopCount"] == 0
+    assert flat["diagnostics_faultActive"] is False
+    assert flat["diagnostics_loopTimeMs"] == 0.0
 
 
 def test_tunable_flags():
     d = _make_demo()
-    assert d._registry.get("controller.pid.kp").tunable is True
-    assert d._registry.get("controller.pid.ki").tunable is True
-    assert d._registry.get("controller.state").tunable is True
-    assert d._registry.get("diagnostics.loop_count").tunable is False
-    assert d._registry.get("diagnostics.fault_active").tunable is False
-    assert d._registry.get("diagnostics.loop_time_ms").tunable is False
+    assert d._registry.get("controller_pid_kp").tunable is True
+    assert d._registry.get("controller_pid_ki").tunable is True
+    assert d._registry.get("controller_state").tunable is True
+    assert d._registry.get("diagnostics_loopCount").tunable is False
+    assert d._registry.get("diagnostics_faultActive").tunable is False
+    assert d._registry.get("diagnostics_loopTimeMs").tunable is False
 
 
 def test_state_enum_cases():
     d = _make_demo()
-    cases = d._registry.get("controller.state").cases
+    cases = d._registry.get("controller_state").cases
     assert cases == list(dict.fromkeys(STATE_CYCLE))
 
 
@@ -92,8 +92,8 @@ async def test_get_readings_returns_flat_dict():
     d = _make_demo()
     readings = await d.get_readings()
     assert isinstance(readings, dict)
-    assert "controller.pid.kp" in readings
-    assert "diagnostics.loop_count" in readings
+    assert "controller_pid_kp" in readings
+    assert "diagnostics_loopCount" in readings
 
 
 async def test_do_command_vt_dump():
@@ -106,19 +106,19 @@ async def test_do_command_vt_dump():
 async def test_do_command_vt_set_tunable():
     d = _make_demo()
     resp = await d.do_command(
-        {"command": "vt.set", "path": "controller.pid.kp", "value": 9.5}
+        {"command": "vt.set", "path": "controller_pid_kp", "value": 9.5}
     )
     assert resp["ok"] is True
     assert resp["previous"] == 5.0
     assert resp["value"] == 9.5
     flat = d._registry.flatten()
-    assert flat["controller.pid.kp"] == 9.5
+    assert flat["controller_pid_kp"] == 9.5
 
 
 async def test_do_command_vt_set_non_tunable():
     d = _make_demo()
     resp = await d.do_command(
-        {"command": "vt.set", "path": "diagnostics.loop_count", "value": 99}
+        {"command": "vt.set", "path": "diagnostics_loopCount", "value": 99}
     )
     assert resp == {"ok": False, "error": "not_tunable"}
 
@@ -155,23 +155,23 @@ def test_trajectory_paths_present():
     d = _make_demo()
     flat = set(d._registry.flatten().keys())
     expected = {
-        "trajectory.start",
-        "trajectory.pause",
-        "trajectory.stop",
-        "trajectory.trajectory_time",
-        "trajectory.time_in_trajectory",
-        "trajectory.state",
-        "pose.x",
-        "pose.y",
-        "pose.z",
-        "pose.qw",
-        "pose.qx",
-        "pose.qy",
-        "pose.qz",
-        "filtered_pose.x",
-        "filtered_pose.qw",
-        "filter.alpha_translation",
-        "filter.alpha_orientation",
+        "trajectory_start",
+        "trajectory_pause",
+        "trajectory_stop",
+        "trajectory_trajectoryTime",
+        "trajectory_timeInTrajectory",
+        "trajectory_state",
+        "pose_x",
+        "pose_y",
+        "pose_z",
+        "pose_qw",
+        "pose_qx",
+        "pose_qy",
+        "pose_qz",
+        "filteredPose_x",
+        "filteredPose_qw",
+        "filter_alphaTranslation",
+        "filter_alphaOrientation",
     }
     assert expected <= flat
 
@@ -180,12 +180,12 @@ def test_trajectory_initial_pose_is_first_waypoint():
     d = _make_demo()
     flat = d._registry.flatten()
     for i, name in enumerate(["x", "y", "z", "qw", "qx", "qy", "qz"]):
-        assert flat[f"pose.{name}"] == WAYPOINTS[0][i]
+        assert flat[f"pose_{name}"] == WAYPOINTS[0][i]
 
 
 def test_trajectory_state_initially_idle():
     d = _make_demo()
-    assert d._registry.get("trajectory.state").value == "idle"
+    assert d._registry.get("trajectory_state").value == "idle"
 
 
 def test_smoothstep_endpoints_and_midpoint():
@@ -295,8 +295,8 @@ def test_waypoints_actually_vary_orientation_components():
 
 def test_filter_alphas_are_tunable_with_bounds():
     d = _make_demo()
-    a_t = d._registry.get("filter.alpha_translation")
-    a_o = d._registry.get("filter.alpha_orientation")
+    a_t = d._registry.get("filter_alphaTranslation")
+    a_o = d._registry.get("filter_alphaOrientation")
     assert a_t.tunable and a_o.tunable
     assert a_t.min == 0.001 and a_t.max == 1.0
     assert a_o.min == 0.001 and a_o.max == 1.0
@@ -304,12 +304,12 @@ def test_filter_alphas_are_tunable_with_bounds():
 
 def test_trajectory_controls_are_tunable():
     d = _make_demo()
-    for path in ("trajectory.start", "trajectory.pause", "trajectory.stop"):
+    for path in ("trajectory_start", "trajectory_pause", "trajectory_stop"):
         assert d._registry.get(path).tunable is True
-    assert d._registry.get("trajectory.trajectory_time").tunable is True
+    assert d._registry.get("trajectory_trajectoryTime").tunable is True
 
 
 def test_trajectory_state_and_time_in_trajectory_are_read_only():
     d = _make_demo()
-    assert d._registry.get("trajectory.state").tunable is False
-    assert d._registry.get("trajectory.time_in_trajectory").tunable is False
+    assert d._registry.get("trajectory_state").tunable is False
+    assert d._registry.get("trajectory_timeInTrajectory").tunable is False

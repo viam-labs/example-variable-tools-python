@@ -31,8 +31,8 @@ def test_vt_dump():
     resp = handle_command(r, {"command": "vt.dump"})
     assert resp is not None
     assert resp["values"] == {
-        "pid.kp": 5.0,
-        "pid.ki": 0.1,
+        "pid_kp": 5.0,
+        "pid_ki": 0.1,
         "count": 0,
         "flag": False,
         "state": "idle",
@@ -61,16 +61,16 @@ def test_vt_paths():
     r = _build_registry()
     resp = handle_command(r, {"command": "vt.paths"})
     assert resp is not None
-    assert set(resp["paths"]) == {"pid.kp", "pid.ki", "count", "flag", "state"}
+    assert set(resp["paths"]) == {"pid_kp", "pid_ki", "count", "flag", "state"}
 
 
 def test_vt_set_ok():
     r = _build_registry()
     resp = handle_command(
-        r, {"command": "vt.set", "path": "pid.kp", "value": 9.5}
+        r, {"command": "vt.set", "path": "pid_kp", "value": 9.5}
     )
     assert resp == {"ok": True, "previous": 5.0, "value": 9.5}
-    assert r.get("pid.kp").value == 9.5
+    assert r.get("pid_kp").value == 9.5
 
 
 def test_vt_set_unknown_variable():
@@ -90,7 +90,7 @@ def test_vt_set_not_tunable():
 def test_vt_set_out_of_range_low():
     r = _build_registry()
     resp = handle_command(
-        r, {"command": "vt.set", "path": "pid.kp", "value": -1.0}
+        r, {"command": "vt.set", "path": "pid_kp", "value": -1.0}
     )
     assert resp == {"ok": False, "error": "out_of_range"}
 
@@ -98,7 +98,7 @@ def test_vt_set_out_of_range_low():
 def test_vt_set_out_of_range_high():
     r = _build_registry()
     resp = handle_command(
-        r, {"command": "vt.set", "path": "pid.kp", "value": 200.0}
+        r, {"command": "vt.set", "path": "pid_kp", "value": 200.0}
     )
     assert resp == {"ok": False, "error": "out_of_range"}
 
@@ -107,7 +107,7 @@ def test_vt_set_only_min_enforced():
     r = _build_registry()
     # pid.ki has min=0.0 but no max
     resp = handle_command(
-        r, {"command": "vt.set", "path": "pid.ki", "value": 999.0}
+        r, {"command": "vt.set", "path": "pid_ki", "value": 999.0}
     )
     assert resp["ok"] is True
     assert resp["value"] == 999.0
@@ -116,7 +116,7 @@ def test_vt_set_only_min_enforced():
 def test_vt_set_wrong_type_for_double():
     r = _build_registry()
     resp = handle_command(
-        r, {"command": "vt.set", "path": "pid.kp", "value": "abc"}
+        r, {"command": "vt.set", "path": "pid_kp", "value": "abc"}
     )
     assert resp == {"ok": False, "error": "wrong_type"}
 
@@ -145,7 +145,7 @@ def test_vt_set_missing_path():
 
 def test_vt_set_missing_value():
     r = _build_registry()
-    resp = handle_command(r, {"command": "vt.set", "path": "pid.kp"})
+    resp = handle_command(r, {"command": "vt.set", "path": "pid_kp"})
     assert resp == {"ok": False, "error": "wrong_type"}
 
 
@@ -159,7 +159,7 @@ def test_dump_version_increases_after_set():
     r = _build_registry()
     v1 = handle_command(r, {"command": "vt.dump"})["version"]
     # vt.set does NOT bump version (only structural adds do)
-    handle_command(r, {"command": "vt.set", "path": "pid.kp", "value": 7.0})
+    handle_command(r, {"command": "vt.set", "path": "pid_kp", "value": 7.0})
     v2 = handle_command(r, {"command": "vt.dump"})["version"]
     assert v1 == v2
     # But adding a variable does bump version

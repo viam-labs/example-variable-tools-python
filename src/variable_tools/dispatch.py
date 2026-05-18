@@ -27,13 +27,22 @@ def handle_command(
         return None
 
     if verb == "vt.dump":
-        return {"values": reg.flatten(), "version": reg.effective_version()}
+        return {
+            "values": reg.flatten(),
+            "version": reg.effective_version(),
+            "separator": reg.separator,
+        }
     if verb == "vt.schema":
-        return {"schema": reg.schema(), "version": reg.effective_version()}
+        return {
+            "schema": reg.schema(),
+            "version": reg.effective_version(),
+            "separator": reg.separator,
+        }
     if verb == "vt.paths":
         return {
             "paths": list(reg.flatten().keys()),
             "version": reg.effective_version(),
+            "separator": reg.separator,
         }
     if verb == "vt.set":
         return _handle_set(reg, command)

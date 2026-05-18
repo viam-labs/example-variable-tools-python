@@ -194,10 +194,13 @@ class Demo(Sensor, EasyResource):
             "state", "idle", list(dict.fromkeys(STATE_CYCLE)), tunable=True
         )
 
+        # camelCase variable/registry names so they don't collide with the
+        # registry separator (default "_"). Full flattened keys read e.g.
+        # "diagnostics_loopCount", "trajectory_trajectoryTime".
         diagnostics = root.add_child("diagnostics")
-        diagnostics.add_int("loop_count", 0)
-        diagnostics.add_bool("fault_active", False)
-        diagnostics.add_double("loop_time_ms", 0.0, units="ms")
+        diagnostics.add_int("loopCount", 0)
+        diagnostics.add_bool("faultActive", False)
+        diagnostics.add_double("loopTimeMs", 0.0, units="ms")
 
         # Trajectory controls + readout.
         traj = root.add_child("trajectory")
@@ -205,14 +208,14 @@ class Demo(Sensor, EasyResource):
         traj.add_bool("pause", False, tunable=True)
         traj.add_bool("stop", False, tunable=True)
         traj.add_double(
-            "trajectory_time",
+            "trajectoryTime",
             DEFAULT_TRAJECTORY_TIME_S,
             tunable=True,
             min=0.5,
             max=60.0,
             units="s",
         )
-        traj.add_double("time_in_trajectory", 0.0, units="s")
+        traj.add_double("timeInTrajectory", 0.0, units="s")
         traj.add_enum("state", "idle", TRAJ_STATES)
 
         # Live pose along the trajectory: translation + unit quaternion.
@@ -227,7 +230,7 @@ class Demo(Sensor, EasyResource):
         pose.add_double("qz", wp0[6])
 
         # Filtered pose — same shape, low-pass-smoothed.
-        fp = root.add_child("filtered_pose")
+        fp = root.add_child("filteredPose")
         fp.add_double("x", wp0[0], units="mm")
         fp.add_double("y", wp0[1], units="mm")
         fp.add_double("z", wp0[2], units="mm")
@@ -240,14 +243,14 @@ class Demo(Sensor, EasyResource):
         # smaller = more smoothing / more lag.
         f = root.add_child("filter")
         f.add_double(
-            "alpha_translation",
+            "alphaTranslation",
             DEFAULT_ALPHA,
             tunable=True,
             min=0.001,
             max=1.0,
         )
         f.add_double(
-            "alpha_orientation",
+            "alphaOrientation",
             DEFAULT_ALPHA,
             tunable=True,
             min=0.001,
@@ -293,36 +296,39 @@ class Demo(Sensor, EasyResource):
 
     async def _loop(self) -> None:
         interval = 1.0 / TICK_HZ
-        loop_count = self._registry.get("diagnostics.loop_count")
-        fault_active = self._registry.get("diagnostics.fault_active")
-        loop_time_ms = self._registry.get("diagnostics.loop_time_ms")
-        state_var = self._registry.get("controller.state")
+        # All var lookups use the registry's separator ("_"). Registry.get
+        # also accepts "." for backward compat, but we use the canonical
+        # form here.
+        loop_count = self._registry.get("diagnostics_loopCount")
+        fault_active = self._registry.get("diagnostics_faultActive")
+        loop_time_ms = self._registry.get("diagnostics_loopTimeMs")
+        state_var = self._registry.get("controller_state")
 
-        traj_start = self._registry.get("trajectory.start")
-        traj_pause = self._registry.get("trajectory.pause")
-        traj_stop = self._registry.get("trajectory.stop")
-        traj_time_var = self._registry.get("trajectory.trajectory_time")
-        traj_in = self._registry.get("trajectory.time_in_trajectory")
-        traj_state_var = self._registry.get("trajectory.state")
+        traj_start = self._registry.get("trajectory_start")
+        traj_pause = self._registry.get("trajectory_pause")
+        traj_stop = self._registry.get("trajectory_stop")
+        traj_time_var = self._registry.get("trajectory_trajectoryTime")
+        traj_in = self._registry.get("trajectory_timeInTrajectory")
+        traj_state_var = self._registry.get("trajectory_state")
 
-        pose_x = self._registry.get("pose.x")
-        pose_y = self._registry.get("pose.y")
-        pose_z = self._registry.get("pose.z")
-        pose_qw = self._registry.get("pose.qw")
-        pose_qx = self._registry.get("pose.qx")
-        pose_qy = self._registry.get("pose.qy")
-        pose_qz = self._registry.get("pose.qz")
+        pose_x = self._registry.get("pose_x")
+        pose_y = self._registry.get("pose_y")
+        pose_z = self._registry.get("pose_z")
+        pose_qw = self._registry.get("pose_qw")
+        pose_qx = self._registry.get("pose_qx")
+        pose_qy = self._registry.get("pose_qy")
+        pose_qz = self._registry.get("pose_qz")
 
-        fp_x = self._registry.get("filtered_pose.x")
-        fp_y = self._registry.get("filtered_pose.y")
-        fp_z = self._registry.get("filtered_pose.z")
-        fp_qw = self._registry.get("filtered_pose.qw")
-        fp_qx = self._registry.get("filtered_pose.qx")
-        fp_qy = self._registry.get("filtered_pose.qy")
-        fp_qz = self._registry.get("filtered_pose.qz")
+        fp_x = self._registry.get("filteredPose_x")
+        fp_y = self._registry.get("filteredPose_y")
+        fp_z = self._registry.get("filteredPose_z")
+        fp_qw = self._registry.get("filteredPose_qw")
+        fp_qx = self._registry.get("filteredPose_qx")
+        fp_qy = self._registry.get("filteredPose_qy")
+        fp_qz = self._registry.get("filteredPose_qz")
 
-        alpha_t_var = self._registry.get("filter.alpha_translation")
-        alpha_o_var = self._registry.get("filter.alpha_orientation")
+        alpha_t_var = self._registry.get("filter_alphaTranslation")
+        alpha_o_var = self._registry.get("filter_alphaOrientation")
 
         try:
             while True:

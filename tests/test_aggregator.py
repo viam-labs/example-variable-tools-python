@@ -59,6 +59,7 @@ def _make_agg() -> Aggregator:
     a._deps = {}
     a._schemas = {}
     a._prefix_with_name = True
+    a._separator = "_"
     return a
 
 
@@ -71,7 +72,7 @@ async def test_get_readings_single_dep_with_prefix():
     a = _make_agg()
     a._deps = {"arm": StubDep({"kp": 5.0, "ki": 0.1})}
     out = await a.get_readings()
-    assert out == {"arm.kp": 5.0, "arm.ki": 0.1}
+    assert out == {"arm_kp": 5.0, "arm_ki": 0.1}
 
 
 async def test_get_readings_multiple_deps_merge():
@@ -82,9 +83,9 @@ async def test_get_readings_multiple_deps_merge():
     }
     out = await a.get_readings()
     assert out == {
-        "arm.kp": 5.0,
-        "ctrl.setpoint": 1.5,
-        "ctrl.active": True,
+        "arm_kp": 5.0,
+        "ctrl_setpoint": 1.5,
+        "ctrl_active": True,
     }
 
 
@@ -104,7 +105,7 @@ async def test_one_failing_dep_does_not_break_others():
         "alsogood": StubDep({"y": 2.0}),
     }
     out = await a.get_readings()
-    assert out == {"good.x": 1.0, "alsogood.y": 2.0}
+    assert out == {"good_x": 1.0, "alsogood_y": 2.0}
 
 
 async def test_silent_dep_skipped():
@@ -116,7 +117,7 @@ async def test_silent_dep_skipped():
         "silent": SilentDep(),
     }
     out = await a.get_readings()
-    assert out == {"good.x": 1.0}
+    assert out == {"good_x": 1.0}
 
 
 async def test_schema_all_refreshes_from_deps():
@@ -134,20 +135,33 @@ async def test_schema_all_refreshes_from_deps():
 
 async def test_vt_set_routes_to_dep():
     a = _make_agg()
-    arm = StubDep({"pid.kp": 5.0})
+    arm = StubDep({"pid_kp": 5.0})
     a._deps = {"arm": arm}
     resp = await a.do_command(
-        {"command": "vt.set", "path": "arm.pid.kp", "value": 9.5}
+        {"command": "vt.set", "path": "arm_pid_kp", "value": 9.5}
     )
     assert resp["ok"] is True
-    assert arm._values["pid.kp"] == 9.5
+    assert arm._values["pid_kp"] == 9.5
+
+
+async def test_vt_set_routes_via_dot_for_backward_compat():
+    """Older clients may still send dotted paths; aggregator falls back
+    to splitting on '.' if the configured separator doesn't appear."""
+    a = _make_agg()
+    arm = StubDep({"pid_kp": 5.0})
+    a._deps = {"arm": arm}
+    resp = await a.do_command(
+        {"command": "vt.set", "path": "arm.pid_kp", "value": 9.5}
+    )
+    assert resp["ok"] is True
+    assert arm._values["pid_kp"] == 9.5
 
 
 async def test_vt_set_unknown_dep_prefix():
     a = _make_agg()
     a._deps = {"arm": StubDep({"kp": 5.0})}
     resp = await a.do_command(
-        {"command": "vt.set", "path": "nope.kp", "value": 1.0}
+        {"command": "vt.set", "path": "nope_kp", "value": 1.0}
     )
     assert resp == {"ok": False, "error": "unknown_variable"}
 

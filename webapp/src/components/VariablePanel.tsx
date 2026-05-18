@@ -14,6 +14,7 @@ interface Props {
   width: number;
   onWidthChange: (px: number) => void;
   onSet: (info: PathInfo, value: Scalar) => void;
+  separator: string;
 }
 
 export function VariablePanel({
@@ -27,6 +28,7 @@ export function VariablePanel({
   width,
   onWidthChange,
   onSet,
+  separator,
 }: Props) {
   const dragStart = useRef<{ x: number; w: number } | null>(null);
   const onResizeDown = (e: React.PointerEvent) => {
@@ -139,6 +141,7 @@ export function VariablePanel({
           selected={selected}
           onSelect={handleSelect}
           onSet={onSet}
+          separator={separator}
         />
       </div>
     </div>
@@ -156,6 +159,7 @@ type TreeNode = {
 function buildTree(
   pathsBySource: Map<string, PathInfo[]>,
   filtered: PathInfo[],
+  separator: string,
 ): TreeNode {
   const root: TreeNode = {
     key: "",
@@ -176,11 +180,11 @@ function buildTree(
     };
     for (const p of paths) {
       if (!allowed.has(p.fullPath)) continue;
-      const parts = p.registryPath ? p.registryPath.split(".") : [];
+      const parts = p.registryPath ? p.registryPath.split(separator) : [];
       let node = sourceNode;
       let accum = source;
       for (const part of parts) {
-        accum += "." + part;
+        accum += separator + part;
         let next = node.children.get(part);
         if (!next) {
           next = {
@@ -213,6 +217,7 @@ function TreeList({
   selected,
   onSelect,
   onSet,
+  separator,
 }: {
   paths: PathInfo[];
   pathsBySource: Map<string, PathInfo[]>;
@@ -223,10 +228,11 @@ function TreeList({
   selected: Set<string>;
   onSelect: (path: string, e: React.MouseEvent) => void;
   onSet: (info: PathInfo, value: Scalar) => void;
+  separator: string;
 }) {
   const root = useMemo(
-    () => buildTree(pathsBySource, paths),
-    [pathsBySource, paths],
+    () => buildTree(pathsBySource, paths, separator),
+    [pathsBySource, paths, separator],
   );
 
   const isExpanded = (key: string): boolean =>
