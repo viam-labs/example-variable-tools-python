@@ -107,57 +107,22 @@ export function ExportDialog({
 
         <div className="field">
           <label>Format</label>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-            }}
-          >
+          <div className="segmented">
             {FORMATS.map((f) => (
-              <label
+              <button
                 key={f.value}
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  padding: "6px 8px",
-                  border: "1px solid var(--border)",
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  background: format === f.value ? "var(--accent-soft)" : "transparent",
-                }}
+                type="button"
+                className={format === f.value ? "active" : ""}
+                onClick={() => setFormat(f.value)}
+                title={f.hint}
               >
-                <input
-                  type="radio"
-                  name="format"
-                  value={f.value}
-                  checked={format === f.value}
-                  onChange={() => setFormat(f.value)}
-                  style={{ marginTop: 2 }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 12 }}>{f.label}</div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "var(--text-dim)",
-                      marginTop: 2,
-                    }}
-                  >
-                    {f.hint}
-                  </div>
-                </div>
-              </label>
+                {f.label}
+              </button>
             ))}
           </div>
-        </div>
-
-        <div
-          style={{ fontSize: 11, color: "var(--text-dim)" }}
-        >
-          Parquet is intentionally not yet supported here (would require
-          shipping ~2 MB of Arrow + parquet-wasm in the bundle). CSV
-          imports cleanly into pandas / DuckDB if you need columnar.
+          <span style={{ fontSize: 11, color: "var(--text)" }}>
+            {FORMATS.find((f) => f.value === format)?.hint}
+          </span>
         </div>
 
         {error && <div className="error">{error}</div>}
