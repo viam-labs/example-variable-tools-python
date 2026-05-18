@@ -8,7 +8,7 @@ An SCS-inspired browser scope for inspecting, plotting, and tuning
 - **Connects** to any Viam machine running a sensor that responds to
   `getReadings` (and, optionally, the `vt.schema` / `vt.schema_all`
   DoCommand verbs for typed schema info). Auto-detects whether the target
-  is an aggregator (fan-out across deps) or a single sensor (direct).
+  is a scope (fan-out across deps) or a single sensor (direct).
 - **Variable panel (left).** Hierarchical tree, search box, multi-select
   via `shift`/`ctrl`-click, draggable to plots and the tunables area.
   Live values inline; for tunable variables you can **click the value to
@@ -81,8 +81,8 @@ First load shows a connection dialog. Fill in:
 - **API key id + key** — create one on app.viam.com under Settings → API
   Keys if you don't have one. Read access to the machine is enough for
   inspection; for `vt.set` (tuning) you need write.
-- **Resource name** — usually the aggregator (`vt-aggregator`). If your
-  machine doesn't run an aggregator, point this at a single sensor and
+- **Resource name** — usually the scope (`vt-scope`). If your
+  machine doesn't run a scope, point this at a single sensor and
   pick "Direct sensor" in the Mode dropdown.
 
 Credentials persist to `localStorage` — clear it through devtools to
@@ -99,8 +99,8 @@ For each poll:
 
 1. Calls **`Sensor.getReadings()`** on the configured resource. (Earlier
    versions used `do_command({"command": "vt.dump"})`, which works for
-   single sensors but returned `{}` against the aggregator pre-0.0.3 —
-   `getReadings` works uniformly because the aggregator's
+   single sensors but returned `{}` against the scope pre-0.0.3 —
+   `getReadings` works uniformly because the scope's
    `get_readings` does the fan-out.)
 2. Appends `(timestamp_ms, value)` to a per-path **time-windowed buffer**
    (prunes by age based on the Window setting).
@@ -108,7 +108,7 @@ For each poll:
 
 On connect (and any time you reconnect):
 
-1. Probes `vt.schema_all` for aggregator mode, falls back to `vt.schema`
+1. Probes `vt.schema_all` for scope mode, falls back to `vt.schema`
    for direct mode. The schema tree drives the variable panel and the
    tunable list.
 2. Flattens to dotted-path keys matching the wire format of `getReadings`.
@@ -139,8 +139,8 @@ Two ways to set values:
 
 Both paths issue `vt.set` against the right resource:
 
-- **Aggregator mode:** `vt.set` is sent to the aggregator with the full
-  prefixed path (e.g. `vt-demo.controller.pid.kp`); the aggregator
+- **Scope mode:** `vt.set` is sent to the scope with the full
+  prefixed path (e.g. `vt-demo.controller.pid.kp`); the scope
   splits off the prefix and routes to the owning dep.
 - **Direct mode:** `vt.set` is sent to the sensor with the local path
   (e.g. `controller.pid.kp`).
@@ -212,7 +212,7 @@ webapp/
   log per session — useful when wire-format differences cause empty
   values.
 - **`Sensor.getReadings` is the data path,** not `vt.dump`. The
-  aggregator's `do_command` does also handle `vt.dump` as of 0.0.3 if
+  scope's `do_command` does also handle `vt.dump` as of 0.0.3 if
   you're querying via DoCommand instead.
 
 ## Theming

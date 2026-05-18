@@ -1,13 +1,19 @@
-"""``viam:example-variable-tools-python:aggregator`` — a Sensor that fans
-out to declared resource deps and merges their ``variable_tools`` registries
-into a single flat reading map suitable for data-manager capture.
+"""``viam:example-variable-tools-python:scope`` — a Sensor that fans out to
+declared resource deps and merges their ``variable_tools`` registries into
+a single flat reading map suitable for data-manager capture and live
+inspection via the browser scope.
+
+(Previously named ``aggregator`` — renamed in 0.0.13 to brand-match the
+``variable-tools-scope`` web app. Existing configs must update their
+``model`` field from ``…:aggregator`` to ``…:scope``.)
 
 Config attributes:
   * ``sources``: required list of resource names. The framework injects each
     as a dependency on reconfigure.
   * ``prefix_with_name``: optional bool, default true. When true, each dep's
-    keys are prefixed with ``<resource_name>.``; when false the keys are
-    passed through (risk of collisions if two deps publish the same path).
+    keys are prefixed with ``<resource_name><separator>``; when false the
+    keys pass through (risk of collisions if two deps publish the same
+    path).
 
 ``get_readings`` issues ``vt.dump`` to every dep in parallel and merges the
 result. A dep that fails (no ``vt.*`` support, exception, malformed reply)
@@ -16,9 +22,10 @@ is logged and skipped; the reading set is partial-but-valid.
 ``do_command``:
   * ``vt.schema_all`` — refresh cached schemas from each dep, return
     ``{"schemas": {dep_name: <schema>}}``.
-  * ``vt.set`` — splits ``path`` on the first ``.`` and routes to that dep's
-    ``vt.set``. Unknown dep prefix returns ``{"ok": false, "error":
-    "unknown_variable"}``.
+  * ``vt.dump`` — delegate to ``get_readings``.
+  * ``vt.set`` — split ``path`` on the configured separator and route to
+    that dep's ``vt.set``. Unknown dep prefix returns
+    ``{"ok": false, "error": "unknown_variable"}``.
 """
 import asyncio
 from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple
@@ -55,9 +62,9 @@ def _parse_sources(config: ComponentConfig) -> Sequence[str]:
     return out
 
 
-class Aggregator(Sensor, EasyResource):
+class Scope(Sensor, EasyResource):
     MODEL: ClassVar[Model] = Model(
-        ModelFamily("viam", "example-variable-tools-python"), "aggregator"
+        ModelFamily("viam", "example-variable-tools-python"), "scope"
     )
 
     def __init__(self, name: str):
@@ -105,7 +112,7 @@ class Aggregator(Sensor, EasyResource):
         missing = wanted - set(resolved.keys())
         if missing:
             LOGGER.warning(
-                "aggregator: declared sources not present in dependencies: %s",
+                "scope: declared sources not present in dependencies: %s",
                 sorted(missing),
             )
         # Preserve config order, only for sources that resolved.
@@ -128,7 +135,7 @@ class Aggregator(Sensor, EasyResource):
         )
         for (name, _), result in zip(self._deps.items(), results):
             if isinstance(result, Exception):
-                LOGGER.warning("aggregator: %s vt.schema failed: %s", name, result)
+                LOGGER.warning("scope: %s vt.schema failed: %s", name, result)
                 continue
             if isinstance(result, Mapping) and "schema" in result:
                 self._schemas[name] = result
@@ -151,11 +158,11 @@ class Aggregator(Sensor, EasyResource):
         out: Dict[str, SensorReading] = {}
         for (name, _), result in zip(self._deps.items(), results):
             if isinstance(result, Exception):
-                LOGGER.warning("aggregator: %s vt.dump failed: %s", name, result)
+                LOGGER.warning("scope: %s vt.dump failed: %s", name, result)
                 continue
             if not isinstance(result, Mapping):
                 LOGGER.warning(
-                    "aggregator: %s vt.dump returned %s, expected Mapping",
+                    "scope: %s vt.dump returned %s, expected Mapping",
                     name,
                     type(result).__name__,
                 )
@@ -163,7 +170,7 @@ class Aggregator(Sensor, EasyResource):
             values = result.get("values")
             if not isinstance(values, Mapping):
                 LOGGER.warning(
-                    "aggregator: %s vt.dump missing 'values' key", name
+                    "scope: %s vt.dump missing 'values' key", name
                 )
                 continue
             # Drift check: invalidate cached schema if version disagrees.
@@ -173,7 +180,7 @@ class Aggregator(Sensor, EasyResource):
                 live_v = result.get("version")
                 if cached_v is not None and live_v is not None and cached_v != live_v:
                     LOGGER.info(
-                        "aggregator: %s schema version drift (cached=%s live=%s); "
+                        "scope: %s schema version drift (cached=%s live=%s); "
                         "invalidating",
                         name,
                         cached_v,

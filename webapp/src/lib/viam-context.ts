@@ -16,8 +16,8 @@ import type { ConnectionConfig } from "../types";
  * localStorage (returning user) or shows the dialog (first-time).
  *
  * URL parameters can override the defaults:
- *   ?resource=<name>     — which sensor to query (default vt-aggregator)
- *   ?mode=<auto|aggregator|direct>
+ *   ?resource=<name>     — which sensor to query (default vt-scope)
+ *   ?mode=<auto|scope|direct>
  */
 export function tryViamAppContext(): ConnectionConfig | null {
   if (typeof window === "undefined") return null;
@@ -48,10 +48,10 @@ export function tryViamAppContext(): ConnectionConfig | null {
 
   const params = url.searchParams;
   const resource =
-    params.get("resource") || params.get("component") || "vt-aggregator";
+    params.get("resource") || params.get("component") || "vt-scope";
   const modeParam = params.get("mode");
   const mode: ConnectionConfig["mode"] =
-    modeParam === "aggregator" || modeParam === "direct" ? modeParam : "auto";
+    modeParam === "scope" || modeParam === "direct" ? modeParam : "auto";
 
   const machineId =
     (parsed.machineId as string | undefined) ??

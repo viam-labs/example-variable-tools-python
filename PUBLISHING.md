@@ -47,7 +47,7 @@ brand-new module with no copy-paste.
 
 - [ ] Add `viam-variable-tools` to `requirements.txt` here.
 - [ ] Delete `src/variable_tools/` from this repo.
-- [ ] Update imports in `src/demo.py`, `src/aggregator.py` from
+- [ ] Update imports in `src/demo.py`, `src/scope.py` from
   `from .variable_tools import ...` to `from variable_tools import ...`.
 - [ ] Update `Makefile` so `module.tar.gz` no longer lists the embedded
   library files (they come from the venv).

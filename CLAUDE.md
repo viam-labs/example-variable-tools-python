@@ -20,7 +20,7 @@ A Viam module that ships:
      trajectory with `start`/`pause`/`stop` triggers, a low-pass filtered
      copy of the pose with tunable alphas, and the standard `system.*`
      timing channels via `SystemTiming`.
-   - **`viam:example-variable-tools-python:aggregator`** — Sensor that takes
+   - **`viam:example-variable-tools-python:scope`** — Sensor that takes
      other resources as deps, fans out via `get_readings` (and `vt.dump`)
      to each in parallel, merges into a unified flat reading map. Itself a
      Sensor so the data manager captures the merged map for free.
@@ -39,7 +39,7 @@ tuning over `do_command` instead of a custom protocol).
 ```
 webapp/                          # Vite + React + TS + uPlot + @viamrobotics/sdk. See webapp/README.md.
   src/App.tsx                    # Top-level state coordinator. xOverride lives here so scrubBy can pan visible window at edges.
-  src/viam-client.ts             # SDK wrapper: probe schema (auto/aggregator/direct), getReadings dump, set
+  src/viam-client.ts             # SDK wrapper: probe schema (auto/scope/direct), getReadings dump, set
   src/components/
     ConnectionBar.tsx            # Top: status, host, polls/values diagnostics, window/poll dropdowns, theme, connection
     ConnectionDialog.tsx         # Initial / re-auth modal
@@ -56,9 +56,9 @@ webapp/                          # Vite + React + TS + uPlot + @viamrobotics/sdk
   src/lib/schema.ts              # Schema flatten + scalar formatting (precision parameter)
   src/types.ts                   # Wire-format + UI types incl. PersistedLayout
 
-src/main.py                      # Imports Demo + Aggregator so EasyResource registers them, then Module.run_from_registry().
+src/main.py                      # Imports Demo + Scope so EasyResource registers them, then Module.run_from_registry().
 src/demo.py                      # Demo Sensor — registry, fake 20 Hz loop, trajectory + filter (quaternion slerp).
-src/aggregator.py                # Aggregator Sensor — declares config["sources"] as deps, parallel get_readings/vt.dump fan-out, vt.set routing.
+src/scope.py                # Scope Sensor — declares config["sources"] as deps, parallel get_readings/vt.dump fan-out, vt.set routing.
 src/variable_tools/__init__.py   # Library public surface: Registry, Double, Integer, Boolean, Enum, SystemTiming, handle_command.
 src/variable_tools/registry.py   # Registry + Variable subclasses + name validation + version tracking.
 src/variable_tools/dispatch.py   # handle_command — verb table for vt.dump / vt.schema / vt.paths / vt.set.
@@ -67,9 +67,9 @@ tests/test_registry.py           # Registry add/get/flatten/schema/version + typ
 tests/test_dispatch.py           # Every vt.* verb: happy path + each error code path.
 tests/test_schema_golden.py      # Byte-stable schema assertion against a stored GOLDEN string.
 tests/test_demo.py               # Demo Sensor registry shape + tunable round-trip + trajectory math (smoothstep, slerp, axis-angle).
-tests/test_aggregator.py         # Aggregator with stub deps; resilience to a failing dep; vt.set routing; schema drift invalidation.
+tests/test_scope.py         # Scope with stub deps; resilience to a failing dep; vt.set routing; schema drift invalidation.
 tests/test_timing.py             # SystemTiming math via monkeypatched time.
-meta.json                        # Module metadata. Two model entries: :demo and :aggregator, both api rdk:component:sensor.
+meta.json                        # Module metadata. Two model entries: :demo and :scope, both api rdk:component:sensor.
 VERSION                          # Single-line semver. Bump before `make upload` — registry rejects duplicates.
 Makefile                         # `make test`, `make module.tar.gz`, `make upload`.
 pytest.ini                       # asyncio_mode=auto, testpaths=tests.
@@ -87,7 +87,7 @@ via `__new__` + manual attr-set (precedent: example-visualizations-python
 and apriltag-tracker test patterns), then exercise the deterministic
 methods.
 
-Aggregator deps in tests are stubbed as plain objects with an
+Scope deps in tests are stubbed as plain objects with an
 `async def do_command` — no real Viam resource handles needed.
 
 **The schema-format golden test is load-bearing.** Any intentional change
@@ -140,7 +140,7 @@ orientation vector only animates well within a single fixed axis;
 quaternion slerp gives proper great-circle interpolation across all
 rotation axes.
 
-### Aggregator
+### Scope
 
 - `validate_config` parses `sources` (required list of resource name
   strings) and returns it as the required-deps tuple element so the
@@ -162,7 +162,7 @@ rotation axes.
   - `vt.schema_all` → refresh + return cached schemas keyed by dep name.
   - `vt.dump` → delegates to `get_readings`. Added in 0.0.3 because the
     earlier webapp called `do_command({"command": "vt.dump"})` on the
-    aggregator and got `{}`. The webapp now uses `getReadings` directly
+    scope and got `{}`. The webapp now uses `getReadings` directly
     but the verb is preserved for clients that don't differentiate
     between modes.
   - `vt.set` with `path = "<dep>.<rest>"` → routes to the dep's
@@ -210,10 +210,10 @@ rotation axes.
   that the library claimed the verb.
 - **`flatten()` does NOT include the Registry's own name in returned
   keys.** So `Registry("arm").add_double("kp", 5.0)` flatten()s to
-  `{"kp": 5.0}`, not `{"arm.kp": 5.0}`. The aggregator adds the
+  `{"kp": 5.0}`, not `{"arm.kp": 5.0}`. The scope adds the
   resource-name prefix; double-prefixing would yield ugly keys like
   `arm-1.arm.controller.pid.kp`.
-- **Aggregator is a Sensor with dependencies.** Sensors can have deps
+- **Scope is a Sensor with dependencies.** Sensors can have deps
   (apriltag-tracker's `overlay_camera` is a Camera with a source-camera
   dep, same pattern). Don't refactor it to a Service unless you have a
   separate reason — Sensor gets you free data-manager capture.
@@ -225,9 +225,9 @@ rotation axes.
   Schema is the source of truth for distinguishing — clients re-cast using
   the type field.
 - **`Sensor.get_readings()` is the canonical hot-path data fetch.** The
-  `vt.dump` verb works too (the demo's host implements it; the aggregator
+  `vt.dump` verb works too (the demo's host implements it; the scope
   added it in 0.0.3) but the webapp's poll loop uses `getReadings` because
-  it works uniformly across aggregator (fan-out via its own `get_readings`)
+  it works uniformly across scope (fan-out via its own `get_readings`)
   and direct (whose `get_readings` is just `registry.flatten()`).
 - **No locking around variable read/write in v1.** Single-process asyncio
   + GIL covers scalar reads/writes. Users adding OS threads own their
@@ -278,7 +278,7 @@ release pulls in.
 
 **Registry constraint to remember:** model `short_description` in
 `meta.json` is capped at 100 characters. The first attempted upload of
-0.0.1 failed because the aggregator's was 119; trim before push.
+0.0.1 failed because the scope's was 119; trim before push.
 
 ## Don't
 
@@ -288,7 +288,7 @@ release pulls in.
   `vt.schema`; readings stay flat.
 - **Don't allow dots in variable / registry names.** Path parsing is
   unambiguous because of the name-regex check at add time. Loosening this
-  would break `Registry.get(path)`, the aggregator's `vt.set` routing
+  would break `Registry.get(path)`, the scope's `vt.set` routing
   (which splits on first `.`), and the schema golden test.
 - **Don't make `vt.set` silent on non-tunable vars.** Returning
   `{"ok": false, "error": "not_tunable"}` is the contract. Tunable opt-in

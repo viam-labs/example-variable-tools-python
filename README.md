@@ -29,7 +29,7 @@ viam:example-variable-tools-python:demo (Sensor)
   ├── filtered_pose.*               ← low-pass-smoothed copy of pose
   └── filter.alpha_translation, filter.alpha_orientation (tunable)
 
-viam:example-variable-tools-python:aggregator (Sensor)
+viam:example-variable-tools-python:scope (Sensor)
   ├── takes resource deps via config "sources": [...]
   ├── parallel get_readings fan-out, prefix keys with dep name
   └── data manager auto-captures the unified flat map
@@ -115,12 +115,12 @@ so your dispatch falls through.
 `wrong_type`, `invalid_enum_case`. Min/max bounds are enforced **only** on
 `vt.set` — internal `var.value = ...` from your control loop is trusted.
 
-The aggregator additionally implements `vt.schema_all` (returns merged
+The scope additionally implements `vt.schema_all` (returns merged
 schemas keyed by source name) and routes `vt.set` by path prefix.
 
 The canonical hot-path data fetch is **`Sensor.get_readings()`**, which
 returns the same flat dict as `vt.dump.values` — works for both the demo
-and the aggregator (whose `get_readings` does the fan-out). The webapp uses
+and the scope (whose `get_readings` does the fan-out). The webapp uses
 `getReadings` for polling.
 
 ## Wire format
@@ -159,10 +159,10 @@ pick up the changes):
       "attributes": {}
     },
     {
-      "name": "vt-aggregator",
+      "name": "vt-scope",
       "namespace": "rdk",
       "type": "sensor",
-      "model": "viam:example-variable-tools-python:aggregator",
+      "model": "viam:example-variable-tools-python:scope",
       "attributes": {
         "sources": ["vt-demo"],
         "prefix_with_name": true
@@ -188,11 +188,11 @@ The demo runs a 20 Hz fake control loop with:
 - **`filter.alpha_translation`**, **`filter.alpha_orientation`** — both tunable,
   range 0.001–1.0, default 0.1
 
-The aggregator (above) declares `vt-demo` as a dep, fans out, and adds the
+The scope (above) declares `vt-demo` as a dep, fans out, and adds the
 `vt-demo.` prefix to every key. A source that doesn't speak `vt.*` (or
 crashes) is logged and skipped — the reading set is partial-but-valid.
 
-`do_command` on the aggregator:
+`do_command` on the scope:
 - `vt.schema_all` returns merged schemas keyed by dep name
 - `vt.dump` delegates to `get_readings`
 - `vt.set` routes by path prefix: `vt-demo.controller.pid.kp` → forwards to
@@ -249,14 +249,14 @@ limitations.
   fine; for control-loop scrubbing you'd want a streaming verb (out of
   scope, see `3DVizNotes.md` for related thinking).
 - **Not cross-process state.** Each module owns its own registry. Variable
-  updates inside a module are in-process and free; the aggregator's
+  updates inside a module are in-process and free; the scope's
   cross-module merge is poll-based.
 - **Not yet on PyPI.** See `PUBLISHING.md` for the roadmap.
 
 ## Files
 
 - `src/variable_tools/` — the library (drop-in)
-- `src/demo.py`, `src/aggregator.py`, `src/main.py` — the example sensors
+- `src/demo.py`, `src/scope.py`, `src/main.py` — the example sensors
 - `tests/` — 118 pytests; `make test` runs them
 - `webapp/` — Vite + React + uPlot scope (see `webapp/README.md`)
 - `PUBLISHING.md` — roadmap for shipping the library publicly

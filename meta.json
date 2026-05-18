@@ -3,7 +3,7 @@
   "module_id": "viam:example-variable-tools-python",
   "visibility": "public",
   "url": "https://github.com/viam-labs/example-variable-tools-python",
-  "description": "Drop-in Python library plus two example sensors that expose a hierarchical registry of named, typed, runtime-mutable variables (doubles/booleans/integers/enums) for live monitoring and tuning. Inspired by IHMC YoVariables. The :demo sensor runs a fake control loop populating ~6 variables across child registries; the :aggregator sensor takes other resources as deps and fans out via DoCommand to merge their registries into a single flat reading map suitable for data-manager capture.",
+  "description": "Drop-in Python library plus two example sensors that expose a hierarchical registry of named, typed, runtime-mutable variables (doubles/booleans/integers/enums) for live monitoring and tuning. Inspired by IHMC YoVariables. Bundles the variable-tools-scope web app for browser-based plotting + scrubbing + tuning. The :demo sensor runs a fake control loop populating a registry; the :scope sensor takes other resources as deps and fans out via DoCommand to merge their registries into a single flat reading map suitable for data-manager capture.",
   "models": [
     {
       "api": "rdk:component:sensor",
@@ -13,8 +13,8 @@
     },
     {
       "api": "rdk:component:sensor",
-      "model": "viam:example-variable-tools-python:aggregator",
-      "short_description": "Aggregates variable_tools registries from declared resource deps into one flat reading map.",
+      "model": "viam:example-variable-tools-python:scope",
+      "short_description": "Merges variable_tools registries from declared resource deps into a single flat reading map.",
       "markdown_link": "README.md"
     }
   ],

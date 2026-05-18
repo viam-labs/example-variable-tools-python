@@ -1,7 +1,7 @@
 import type { PathInfo, SchemaTreeNode, Scalar, VariableMeta } from "../types";
 
 /** Walk a single source's schema tree into a flat list of PathInfo, prefixed
- * with `source` when `prefixWithSource` is true (aggregator mode). The
+ * with `source` when `prefixWithSource` is true (scope mode). The
  * registry-level path separator is reported by the server in the schema
  * response (default ``_`` as of v0.0.8). Falls back to ``.`` for older
  * servers. */

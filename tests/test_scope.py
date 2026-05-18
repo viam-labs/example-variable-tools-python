@@ -1,7 +1,7 @@
-"""Tests for the Aggregator Sensor.
+"""Tests for the Scope Sensor.
 
 Deps are stubbed as objects with an ``async def do_command``. The
-Aggregator's ``_deps`` mapping is poked in directly, bypassing the
+Scope's ``_deps`` mapping is poked in directly, bypassing the
 framework's resource-name → ResourceBase dependency injection.
 """
 import pytest
@@ -9,7 +9,7 @@ import pytest
 from viam.proto.app.robot import ComponentConfig
 from viam.utils import dict_to_struct
 
-from src.aggregator import Aggregator
+from src.scope import Scope
 
 
 def _config(attrs: dict) -> ComponentConfig:
@@ -54,8 +54,8 @@ class SilentDep:
         return {}
 
 
-def _make_agg() -> Aggregator:
-    a = Aggregator.__new__(Aggregator)
+def _make_agg() -> Scope:
+    a = Scope.__new__(Scope)
     a._deps = {}
     a._schemas = {}
     a._prefix_with_name = True
@@ -110,7 +110,7 @@ async def test_one_failing_dep_does_not_break_others():
 
 async def test_silent_dep_skipped():
     """A dep that returns {} (no vt.* support) is logged and skipped, not
-    crashing the aggregator."""
+    crashing the scope."""
     a = _make_agg()
     a._deps = {
         "good": StubDep({"x": 1.0}),
@@ -145,8 +145,8 @@ async def test_vt_set_routes_to_dep():
 
 
 async def test_vt_set_routes_via_dot_for_backward_compat():
-    """Older clients may still send dotted paths; aggregator falls back
-    to splitting on '.' if the configured separator doesn't appear."""
+    """Older clients may still send dotted paths; scope falls back to
+    splitting on '.' if the configured separator doesn't appear."""
     a = _make_agg()
     arm = StubDep({"pid_kp": 5.0})
     a._deps = {"arm": arm}
@@ -188,7 +188,7 @@ async def test_unknown_do_command_returns_empty():
 
 def test_validate_config_returns_sources_as_required_deps():
     cfg = _config({"sources": ["arm-1", "controller"]})
-    required, optional = Aggregator.validate_config(cfg)
+    required, optional = Scope.validate_config(cfg)
     assert list(required) == ["arm-1", "controller"]
     assert list(optional) == []
 
@@ -196,29 +196,29 @@ def test_validate_config_returns_sources_as_required_deps():
 def test_validate_config_rejects_missing_sources():
     cfg = _config({})
     with pytest.raises(ValueError, match="sources"):
-        Aggregator.validate_config(cfg)
+        Scope.validate_config(cfg)
 
 
 def test_validate_config_rejects_empty_sources_list():
     cfg = _config({"sources": []})
     with pytest.raises(ValueError, match="at least one"):
-        Aggregator.validate_config(cfg)
+        Scope.validate_config(cfg)
 
 
 def test_validate_config_rejects_non_string_entry():
     cfg = _config({"sources": ["good", 123]})
     with pytest.raises(ValueError, match="non-empty strings"):
-        Aggregator.validate_config(cfg)
+        Scope.validate_config(cfg)
 
 
 def test_validate_config_rejects_empty_string_entry():
     cfg = _config({"sources": ["good", ""]})
     with pytest.raises(ValueError, match="non-empty strings"):
-        Aggregator.validate_config(cfg)
+        Scope.validate_config(cfg)
 
 
 async def test_schema_drift_invalidates_cache():
-    """Aggregator caches a dep's schema; if dump's version doesn't match,
+    """Scope caches a dep's schema; if dump's version doesn't match,
     the cache for that dep is invalidated."""
     a = _make_agg()
     dep = StubDep({"x": 1.0}, version=1)

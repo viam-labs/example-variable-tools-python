@@ -18,7 +18,7 @@ export function ConnectionDialog({
   const [host, setHost] = useState(initial?.host ?? "");
   const [keyId, setKeyId] = useState(initial?.keyId ?? "");
   const [apiKey, setApiKey] = useState(initial?.apiKey ?? "");
-  const [resource, setResource] = useState(initial?.resource ?? "vt-aggregator");
+  const [resource, setResource] = useState(initial?.resource ?? "vt-scope");
   const [mode, setMode] = useState<ConnectionConfig["mode"]>(
     initial?.mode ?? "auto",
   );
@@ -71,7 +71,7 @@ export function ConnectionDialog({
           <input
             id="resource"
             type="text"
-            placeholder="vt-aggregator"
+            placeholder="vt-scope"
             value={resource}
             onChange={(e) => setResource(e.target.value)}
             required
@@ -84,8 +84,8 @@ export function ConnectionDialog({
             value={mode}
             onChange={(e) => setMode(e.target.value as ConnectionConfig["mode"])}
           >
-            <option value="auto">Auto (try aggregator, fall back to direct)</option>
-            <option value="aggregator">Aggregator (vt.schema_all)</option>
+            <option value="auto">Auto (try scope, fall back to direct)</option>
+            <option value="scope">Scope (vt.schema_all)</option>
             <option value="direct">Direct sensor (vt.schema)</option>
           </select>
         </div>

@@ -1,6 +1,6 @@
 /** Thin wrapper around @viamrobotics/sdk that knows how to:
  *   - connect with API-key credentials,
- *   - fetch a schema (vt.schema for direct, vt.schema_all for aggregator),
+ *   - fetch a schema (vt.schema for direct, vt.schema_all for scope),
  *   - issue vt.dump and vt.set DoCommands. */
 import { Struct, type JsonValue } from "@bufbuild/protobuf";
 import {
@@ -24,13 +24,13 @@ export interface ConnectedSession {
   config: ConnectionConfig;
   paths: PathInfo[];
   /** Per-source schema tree, keyed by source name. For direct mode this is
-   * `{ [resourceName]: <its schema> }`. For aggregator mode it's one entry
+   * `{ [resourceName]: <its schema> }`. For scope mode it's one entry
    * per dep that responded to vt.schema. */
   schemas: Record<string, SchemaTreeNode>;
-  /** Detected actual mode after probing — "aggregator" or "direct". */
-  mode: "aggregator" | "direct";
+  /** Detected actual mode after probing — "scope" or "direct". */
+  mode: "scope" | "direct";
   /** Whether dump keys should be prefixed with source name. True for
-   * aggregator (its dump already returns prefixed keys), false for direct
+   * scope (its dump already returns prefixed keys), false for direct
    * (a direct sensor's keys are local). */
   prefixWithSource: boolean;
   /** Path separator reported by the server. v0.0.8+ defaults to "_";
@@ -81,12 +81,12 @@ async function probeSchema(
   sensor: SensorClient,
   cfg: ConnectionConfig,
 ): Promise<{
-  mode: "aggregator" | "direct";
+  mode: "scope" | "direct";
   schemas: Record<string, SchemaTreeNode>;
   prefixWithSource: boolean;
   separator: string;
 }> {
-  const tryAggregator = async (): Promise<{
+  const tryScope = async (): Promise<{
     schemas: Record<string, SchemaTreeNode>;
     separator: string;
   } | null> => {
@@ -132,17 +132,17 @@ async function probeSchema(
     return { schemas: { [cfg.resource]: schema }, separator: sep };
   };
 
-  if (cfg.mode === "aggregator" || cfg.mode === "auto") {
-    const agg = await tryAggregator().catch(() => null);
+  if (cfg.mode === "scope" || cfg.mode === "auto") {
+    const agg = await tryScope().catch(() => null);
     if (agg) {
       return {
-        mode: "aggregator",
+        mode: "scope",
         schemas: agg.schemas,
         prefixWithSource: true,
         separator: agg.separator,
       };
     }
-    if (cfg.mode === "aggregator") {
+    if (cfg.mode === "scope") {
       throw new Error("resource did not respond to vt.schema_all");
     }
   }
@@ -159,8 +159,8 @@ async function probeSchema(
 }
 
 /** Fetch current values via Sensor.getReadings — works uniformly for both
- * aggregator (which fans out to deps in its get_readings) and direct sensor
- * (whose get_readings returns its flat registry). For aggregator mode the
+ * scope (which fans out to deps in its get_readings) and direct sensor
+ * (whose get_readings returns its flat registry). For scope mode the
  * keys are already prefixed; for direct mode we prefix them with the
  * resource name so the UI's PathInfo.fullPath matches. */
 export async function dump(
@@ -183,7 +183,7 @@ export async function dump(
 
 let _loggedDumpShape = false;
 
-/** Issue vt.set. For aggregator mode the full path is sent through; for
+/** Issue vt.set. For scope mode the full path is sent through; for
  * direct mode we strip the resource prefix. */
 export async function setValue(
   session: ConnectedSession,

@@ -8,7 +8,7 @@ interface Props {
   host?: string;
   machineId?: string;
   resource?: string;
-  mode?: "aggregator" | "direct";
+  mode?: "scope" | "direct";
   pollRateHz: number;
   onPollRateChange: (hz: number) => void;
   onEditConnection: () => void;
