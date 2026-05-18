@@ -1,7 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import type { PathInfo, PlotPanel } from "../types";
 import type { RingBuffer } from "../lib/ringbuffer";
+import {
+  type ExportFormat,
+  defaultFilename,
+  downloadBlob,
+  exportCsv,
+  exportMat,
+  exportMcap,
+} from "../lib/export";
+import { ExportDialog } from "./ExportDialog";
 import { Plot } from "./Plot";
 import { PlotsToolbar } from "./PlotsToolbar";
 
@@ -73,6 +82,58 @@ export function PlotsArea({
     [paths],
   );
 
+  const plottedPaths = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of plots) for (const s of p.series) set.add(s);
+    return Array.from(set);
+  }, [plots]);
+
+  const totalSamples = useMemo(() => {
+    let n = 0;
+    for (const buf of buffers.values()) n += buf.length;
+    return n;
+  }, [buffers, tick]);
+
+  const [showExport, setShowExport] = useState(false);
+  const canExport = paths.length > 0 && totalSamples > 0;
+
+  const handleExport = async ({
+    format,
+    scope,
+  }: {
+    format: ExportFormat;
+    scope: "all" | "plotted";
+  }) => {
+    const include =
+      scope === "plotted" ? new Set(plottedPaths) : new Set(paths.map((p) => p.fullPath));
+    const series = [];
+    for (const path of include) {
+      const buf = buffers.get(path);
+      if (!buf || buf.length === 0) continue;
+      const [xs, ys] = buf.snapshot();
+      series.push({ path, xs, ys });
+    }
+    if (series.length === 0) {
+      throw new Error("nothing to export — no buffered samples for the selected scope");
+    }
+    let blob: Blob;
+    let ext: string;
+    if (format === "csv") {
+      blob = exportCsv(series);
+      ext = "csv";
+    } else if (format === "mcap") {
+      blob = await exportMcap(series);
+      ext = "mcap";
+    } else if (format === "mat") {
+      blob = exportMat(series);
+      ext = "mat";
+    } else {
+      throw new Error(`unsupported format: ${format}`);
+    }
+    downloadBlob(blob, defaultFilename(ext));
+    setShowExport(false);
+  };
+
   return (
     <div className="plots-region">
       <PlotsToolbar
@@ -95,6 +156,8 @@ export function PlotsArea({
         onAddKeyframe={onAddKeyframe}
         onPrevKeyframe={onPrevKeyframe}
         onNextKeyframe={onNextKeyframe}
+        onExport={() => setShowExport(true)}
+        canExport={canExport}
       />
       <div
         className="plots"
@@ -131,6 +194,15 @@ export function PlotsArea({
           </div>
         )}
       </div>
+      {showExport && (
+        <ExportDialog
+          allPaths={paths.map((p) => p.fullPath)}
+          plottedPaths={plottedPaths}
+          sampleCount={totalSamples}
+          onExport={handleExport}
+          onCancel={() => setShowExport(false)}
+        />
+      )}
     </div>
   );
 }

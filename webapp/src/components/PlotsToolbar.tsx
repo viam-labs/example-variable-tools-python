@@ -18,6 +18,8 @@ interface Props {
   onAddKeyframe: () => void;
   onPrevKeyframe: () => void;
   onNextKeyframe: () => void;
+  onExport: () => void;
+  canExport: boolean;
 }
 
 const COLUMN_OPTIONS = [1, 2, 3, 4];
@@ -42,6 +44,8 @@ export function PlotsToolbar({
   onAddKeyframe,
   onPrevKeyframe,
   onNextKeyframe,
+  onExport,
+  canExport,
 }: Props) {
   return (
     <div className="plots-toolbar">
@@ -134,6 +138,16 @@ export function PlotsToolbar({
           ))}
         </select>
       </label>
+
+      <span className="sep" />
+
+      <button
+        onClick={onExport}
+        disabled={!canExport}
+        title="Export buffered data to CSV / MCAP / MAT"
+      >
+        ⤓ Export
+      </button>
     </div>
   );
 }
