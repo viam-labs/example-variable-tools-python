@@ -15,6 +15,9 @@ interface Props {
   scrubTs: number | null;
   keyframes: number[];
   xOverride: [number, number] | null;
+  trimIn: number | null;
+  trimOut: number | null;
+  trimActive: boolean;
   onRemove: () => void;
   onAddSeries: (path: string) => void;
   onRemoveSeries: (path: string) => void;
@@ -92,6 +95,9 @@ export function Plot({
   scrubTs,
   keyframes,
   xOverride,
+  trimIn,
+  trimOut,
+  trimActive,
   onRemove,
   onAddSeries,
   onRemoveSeries,
@@ -370,6 +376,17 @@ export function Plot({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyframes, xRange, tick, width]);
 
+  const trimInPx = useMemo(
+    () => (trimIn !== null ? pxFor(trimIn) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trimIn, xRange, tick, width],
+  );
+  const trimOutPx = useMemo(
+    () => (trimOut !== null ? pxFor(trimOut) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trimOut, xRange, tick, width],
+  );
+
   const chipValue = (path: string): number | undefined => {
     const buf = buffers.get(path);
     if (!buf) return undefined;
@@ -482,6 +499,53 @@ export function Plot({
           <div className="empty" style={{ position: "absolute", inset: 0 }}>
             empty
           </div>
+        )}
+        {/* Trim region shading + markers. Shown when at least one of
+            in/out is set; the shaded fill only when both are set. */}
+        {trimInPx !== null && trimOutPx !== null && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: Math.min(trimInPx, trimOutPx),
+              width: Math.abs(trimOutPx - trimInPx),
+              background: trimActive
+                ? "rgba(63, 185, 80, 0.10)"
+                : "rgba(63, 185, 80, 0.06)",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+        {trimInPx !== null && (
+          <div
+            className="trim-line"
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: trimInPx,
+              width: 0,
+              borderLeft: "2px solid var(--ok)",
+              pointerEvents: "none",
+            }}
+            title="trim start"
+          />
+        )}
+        {trimOutPx !== null && (
+          <div
+            className="trim-line"
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: trimOutPx,
+              width: 0,
+              borderLeft: "2px solid var(--danger)",
+              pointerEvents: "none",
+            }}
+            title="trim end"
+          />
         )}
         {keyframePx.map((k) => (
           <div

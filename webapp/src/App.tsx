@@ -120,6 +120,12 @@ export function App() {
    * null means auto-fit to data. Lives in App so the polling loop can
    * pan it when the scrub crosses the edge of view. */
   const [xOverride, setXOverride] = useState<[number, number] | null>(null);
+  /** Trim in/out markers (ms timestamps). When both are set AND
+   * trimActive is true, xOverride is locked to this range and exports
+   * are filtered to data inside it. */
+  const [trimIn, setTrimIn] = useState<number | null>(null);
+  const [trimOut, setTrimOut] = useState<number | null>(null);
+  const [trimActive, setTrimActive] = useState<boolean>(false);
 
   // Apply theme to document root.
   useEffect(() => {
@@ -429,6 +435,39 @@ export function App() {
 
   const resetZoom = useCallback(() => setXOverride(null), []);
 
+  // ---- Trim ----
+  const setTrimInHere = useCallback(() => {
+    if (scrubTs === null) return;
+    setTrimIn(scrubTs);
+  }, [scrubTs]);
+  const setTrimOutHere = useCallback(() => {
+    if (scrubTs === null) return;
+    setTrimOut(scrubTs);
+  }, [scrubTs]);
+  const applyTrim = useCallback(() => {
+    if (trimIn === null || trimOut === null) return;
+    const lo = Math.min(trimIn, trimOut);
+    const hi = Math.max(trimIn, trimOut);
+    if (hi - lo < 1) return; // need >1ms range
+    setXOverride([lo / 1000, hi / 1000]);
+    setTrimActive(true);
+  }, [trimIn, trimOut]);
+  const clearTrim = useCallback(() => {
+    setTrimIn(null);
+    setTrimOut(null);
+    setTrimActive(false);
+    setXOverride(null);
+  }, []);
+
+  const trimRangeMs = useMemo<[number, number] | null>(() => {
+    if (!trimActive || trimIn === null || trimOut === null) return null;
+    return [Math.min(trimIn, trimOut), Math.max(trimIn, trimOut)];
+  }, [trimActive, trimIn, trimOut]);
+
+  const trimDurationSec = trimRangeMs
+    ? (trimRangeMs[1] - trimRangeMs[0]) / 1000
+    : null;
+
   /** Pan the visible window by an absolute time delta (ms). Negative
    * shifts the view left (earlier times). Used by middle-click drag. */
   const panByMs = useCallback(
@@ -638,6 +677,9 @@ export function App() {
         windowSec={windowSec}
         onWindowSecChange={setWindowSec}
         paused={paused}
+        trimDurationSec={trimDurationSec}
+        onClearTrim={clearTrim}
+        machineId={connection?.machineId}
       />
       <div
         className="main"
@@ -688,6 +730,14 @@ export function App() {
           onPanRight={panRight}
           onResetZoom={resetZoom}
           onPanByMs={panByMs}
+          trimIn={trimIn}
+          trimOut={trimOut}
+          trimActive={trimActive}
+          trimRangeMs={trimRangeMs}
+          onSetTrimIn={setTrimInHere}
+          onSetTrimOut={setTrimOutHere}
+          onApplyTrim={applyTrim}
+          onClearTrim={clearTrim}
         />
       </div>
       <TunablesBar

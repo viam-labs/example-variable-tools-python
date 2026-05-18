@@ -1,8 +1,12 @@
 import type { ConnectionStatus } from "../types";
 
+// Injected by Vite at build time from the repo's VERSION file.
+declare const __APP_VERSION__: string;
+
 interface Props {
   status: ConnectionStatus;
   host?: string;
+  machineId?: string;
   resource?: string;
   mode?: "aggregator" | "direct";
   pollRateHz: number;
@@ -18,6 +22,10 @@ interface Props {
   windowSec: number;
   onWindowSecChange: (sec: number) => void;
   paused: boolean;
+  /** When trim is active, the duration in seconds (rounded to 2 decimal
+   * places for the dropdown display). null when no trim is in effect. */
+  trimDurationSec: number | null;
+  onClearTrim: () => void;
 }
 
 const RATES = [1, 2, 5, 10, 20, 30];
@@ -32,6 +40,7 @@ const WINDOWS = [
 export function ConnectionBar({
   status,
   host,
+  machineId,
   resource,
   mode,
   pollRateHz,
@@ -47,8 +56,13 @@ export function ConnectionBar({
   windowSec,
   onWindowSecChange,
   paused,
+  trimDurationSec,
+  onClearTrim,
 }: Props) {
   const ageMs = lastDumpAt ? Date.now() - lastDumpAt : null;
+  const machineHref = machineId
+    ? `https://app.viam.com/machine/${encodeURIComponent(machineId)}`
+    : undefined;
   const dotClass =
     status.state === "connected"
       ? "connected"
@@ -59,11 +73,30 @@ export function ConnectionBar({
           : "disconnected";
   return (
     <div className="connbar">
+      <span
+        className="crumb"
+        style={{ color: "var(--text-dim)" }}
+        title="Webapp version (synced to the module's VERSION file at build time)"
+      >
+        v{__APP_VERSION__}
+      </span>
       <span className={`status-dot ${dotClass}`} title={status.state} />
       {host ? (
         <>
           <span className="crumb">
-            <b>{host}</b>
+            {machineHref ? (
+              <a
+                href={machineHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open this machine's config in the Viam app"
+                style={{ color: "var(--accent)" }}
+              >
+                <b>{host}</b>
+              </a>
+            ) : (
+              <b>{host}</b>
+            )}
           </span>
           <span className="crumb">•</span>
           <span className="crumb">
@@ -101,10 +134,23 @@ export function ConnectionBar({
       <label className="crumb">
         Window:&nbsp;
         <select
-          value={windowSec}
-          onChange={(e) => onWindowSecChange(Number(e.target.value))}
-          title="How much history to keep in each variable's buffer"
+          value={trimDurationSec !== null ? -1 : windowSec}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (v === -1) return; // can't pick "trimmed" manually
+            // Selecting any standard window while trimmed clears the trim.
+            if (trimDurationSec !== null) onClearTrim();
+            onWindowSecChange(v);
+          }}
+          title={
+            trimDurationSec !== null
+              ? "Currently showing a trimmed range — pick a window value to clear the trim"
+              : "How much history to keep in each variable's buffer"
+          }
         >
+          {trimDurationSec !== null && (
+            <option value={-1}>trimmed {trimDurationSec.toFixed(2)}s</option>
+          )}
           {WINDOWS.map((w) => (
             <option key={w.sec} value={w.sec}>
               {w.label}

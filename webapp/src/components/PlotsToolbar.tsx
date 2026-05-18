@@ -20,6 +20,14 @@ interface Props {
   onNextKeyframe: () => void;
   onExport: () => void;
   canExport: boolean;
+  scrubTs: number | null;
+  trimIn: number | null;
+  trimOut: number | null;
+  trimActive: boolean;
+  onSetTrimIn: () => void;
+  onSetTrimOut: () => void;
+  onApplyTrim: () => void;
+  onClearTrim: () => void;
 }
 
 const COLUMN_OPTIONS = [1, 2, 3, 4];
@@ -46,7 +54,18 @@ export function PlotsToolbar({
   onNextKeyframe,
   onExport,
   canExport,
+  scrubTs,
+  trimIn,
+  trimOut,
+  trimActive,
+  onSetTrimIn,
+  onSetTrimOut,
+  onApplyTrim,
+  onClearTrim,
 }: Props) {
+  const canSetMark = scrubTs !== null;
+  const canApply =
+    trimIn !== null && trimOut !== null && trimIn !== trimOut && !trimActive;
   return (
     <div className="plots-toolbar">
       <button onClick={onAddPlot} title="Add a new empty plot panel">
@@ -142,9 +161,47 @@ export function PlotsToolbar({
       <span className="sep" />
 
       <button
+        onClick={onSetTrimIn}
+        disabled={!canSetMark}
+        className={trimIn !== null ? "active" : ""}
+        title="Set trim start at the current scrub position"
+      >
+        [ in
+      </button>
+      <button
+        onClick={onSetTrimOut}
+        disabled={!canSetMark}
+        className={trimOut !== null ? "active" : ""}
+        title="Set trim end at the current scrub position"
+      >
+        out ]
+      </button>
+      <button
+        onClick={onApplyTrim}
+        disabled={!canApply}
+        className={trimActive ? "primary" : ""}
+        title="Apply: lock plots and export to the in/out range"
+      >
+        ✂ Trim
+      </button>
+      <button
+        onClick={onClearTrim}
+        disabled={trimIn === null && trimOut === null && !trimActive}
+        title="Clear trim markers and restore full view"
+      >
+        ↺
+      </button>
+
+      <span className="sep" />
+
+      <button
         onClick={onExport}
         disabled={!canExport}
-        title="Export buffered data to CSV / MCAP / MAT"
+        title={
+          trimActive
+            ? "Export buffered data within the trim range (CSV / MCAP / MAT)"
+            : "Export buffered data to CSV / MCAP / MAT"
+        }
       >
         ⤓ Export
       </button>

@@ -44,6 +44,14 @@ interface Props {
   onPanRight: () => void;
   onResetZoom: () => void;
   onPanByMs: (deltaMs: number) => void;
+  trimIn: number | null;
+  trimOut: number | null;
+  trimActive: boolean;
+  trimRangeMs: [number, number] | null;
+  onSetTrimIn: () => void;
+  onSetTrimOut: () => void;
+  onApplyTrim: () => void;
+  onClearTrim: () => void;
 }
 
 export function PlotsArea({
@@ -76,6 +84,14 @@ export function PlotsArea({
   onPanRight,
   onResetZoom,
   onPanByMs,
+  trimIn,
+  trimOut,
+  trimActive,
+  trimRangeMs,
+  onSetTrimIn,
+  onSetTrimOut,
+  onApplyTrim,
+  onClearTrim,
 }: Props) {
   const pathsByFull = useMemo(
     () => new Map(paths.map((p) => [p.fullPath, p])),
@@ -111,7 +127,23 @@ export function PlotsArea({
       const buf = buffers.get(path);
       if (!buf || buf.length === 0) continue;
       const [xs, ys] = buf.snapshot();
-      series.push({ path, xs, ys });
+      // When a trim is active, only export samples within the trim
+      // range — the visual scope and the export scope stay in sync.
+      if (trimRangeMs) {
+        const [lo, hi] = trimRangeMs;
+        const trimmedXs: number[] = [];
+        const trimmedYs: number[] = [];
+        for (let i = 0; i < xs.length; i++) {
+          if (xs[i] >= lo && xs[i] <= hi) {
+            trimmedXs.push(xs[i]);
+            trimmedYs.push(ys[i]);
+          }
+        }
+        if (trimmedXs.length === 0) continue;
+        series.push({ path, xs: trimmedXs, ys: trimmedYs });
+      } else {
+        series.push({ path, xs, ys });
+      }
     }
     if (series.length === 0) {
       throw new Error("nothing to export — no buffered samples for the selected scope");
@@ -158,6 +190,14 @@ export function PlotsArea({
         onNextKeyframe={onNextKeyframe}
         onExport={() => setShowExport(true)}
         canExport={canExport}
+        trimIn={trimIn}
+        trimOut={trimOut}
+        trimActive={trimActive}
+        scrubTs={scrubTs}
+        onSetTrimIn={onSetTrimIn}
+        onSetTrimOut={onSetTrimOut}
+        onApplyTrim={onApplyTrim}
+        onClearTrim={onClearTrim}
       />
       <div
         className="plots"
@@ -176,6 +216,9 @@ export function PlotsArea({
             scrubTs={scrubTs}
             keyframes={keyframes}
             xOverride={xOverride}
+            trimIn={trimIn}
+            trimOut={trimOut}
+            trimActive={trimActive}
             onRemove={() => onRemovePlot(plot.id)}
             onAddSeries={(p) => onAddSeries(plot.id, p)}
             onRemoveSeries={(p) => onRemoveSeries(plot.id, p)}

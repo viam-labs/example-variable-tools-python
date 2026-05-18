@@ -49,6 +49,10 @@ export interface ConnectionConfig {
   /** "auto" probes vt.schema_all first (aggregator), falls back to vt.schema
    * (direct sensor). User can force either with "aggregator" or "direct". */
   mode: "auto" | "aggregator" | "direct";
+  /** When known (typically from the Viam-app embed cookie), the machine's
+   * UUID. Used to render the connection bar's machine name as a link to
+   * app.viam.com/machine/<id>. */
+  machineId?: string;
 }
 
 export type ConnectionStatus =

@@ -553,6 +553,13 @@ button.ghost:hover {
   margin-top: 4px;
 }
 
+/* Toolbar button "active" state — used by trim in/out toggles. */
+.plots-toolbar button.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 /* Segmented control */
 .segmented {
   display: flex;

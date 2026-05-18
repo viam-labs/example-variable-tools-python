@@ -53,7 +53,10 @@ export function tryViamAppContext(): ConnectionConfig | null {
   const mode: ConnectionConfig["mode"] =
     modeParam === "aggregator" || modeParam === "direct" ? modeParam : "auto";
 
-  return { host, keyId: apiKeyId, apiKey, resource, mode };
+  const machineId =
+    (parsed.machineId as string | undefined) ??
+    (parsed.id as string | undefined);
+  return { host, keyId: apiKeyId, apiKey, resource, mode, machineId };
 }
 
 function getCookie(name: string): string | null {
