@@ -74,9 +74,9 @@ export function ExportDialog({
       >
         <h2>Export buffered data</h2>
         <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-          {allPaths.length} variables in schema · {plottedPaths.length} on
-          plots · {sampleCount} total samples currently buffered (limited by
-          the Window setting).
+          {allPaths.length} variables in schema · {plottedPaths.length} on plots
+          · {sampleCount} total samples currently buffered (limited by the
+          Window setting).
         </span>
 
         <div className="field">

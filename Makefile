@@ -17,6 +17,14 @@ test:
 	.venv/bin/pip install -q -r requirements-dev.txt
 	.venv/bin/pytest
 
+# Fixes lint and formatting in place; CI runs the same checks without fixing.
+.PHONY: lint
+lint:
+	.venv/bin/pip install -q -r requirements-dev.txt
+	.venv/bin/ruff check --fix .
+	.venv/bin/ruff format .
+	npx --yes prettier@3.9.10 --write webapp/src
+
 .PHONY: upload
 upload: test module.tar.gz
 	viam module upload --version=$(VERSION) --platform=linux/any module.tar.gz

@@ -78,7 +78,7 @@ jobs:
         with:
           node-version: 24
 
-      # Run `npx prettier@3.9.10 --write webapp/src` to fix formatting locally.
+      # Run `make lint` to fix formatting locally.
       - name: Prettier
         run: npx --yes prettier@3.9.10 --check webapp/src
 

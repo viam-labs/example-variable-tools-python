@@ -121,7 +121,9 @@ export function PlotsArea({
     scope: "all" | "plotted";
   }) => {
     const include =
-      scope === "plotted" ? new Set(plottedPaths) : new Set(paths.map((p) => p.fullPath));
+      scope === "plotted"
+        ? new Set(plottedPaths)
+        : new Set(paths.map((p) => p.fullPath));
     const series = [];
     for (const path of include) {
       const buf = buffers.get(path);
@@ -146,7 +148,9 @@ export function PlotsArea({
       }
     }
     if (series.length === 0) {
-      throw new Error("nothing to export — no buffered samples for the selected scope");
+      throw new Error(
+        "nothing to export — no buffered samples for the selected scope",
+      );
     }
     let blob: Blob;
     let ext: string;

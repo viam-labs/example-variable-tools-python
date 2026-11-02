@@ -106,11 +106,22 @@ export function ConnectionBar({
         </span>
       )}
       {status.state === "connected" && (
-        <span className="crumb" title="polls / values returned / paths in schema / age of last dump">
-          polls: <b>{tickCount}</b> • values: <b>{latestKeys}/{pathCount}</b>
+        <span
+          className="crumb"
+          title="polls / values returned / paths in schema / age of last dump"
+        >
+          polls: <b>{tickCount}</b> • values:{" "}
+          <b>
+            {latestKeys}/{pathCount}
+          </b>
           {ageMs !== null && (
             <>
-              {" "}• last: <b>{ageMs < 1000 ? `${ageMs}ms` : `${(ageMs / 1000).toFixed(1)}s`}</b> ago
+              {" "}
+              • last:{" "}
+              <b>
+                {ageMs < 1000 ? `${ageMs}ms` : `${(ageMs / 1000).toFixed(1)}s`}
+              </b>{" "}
+              ago
             </>
           )}
         </span>

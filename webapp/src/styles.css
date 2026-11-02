@@ -23,7 +23,7 @@
   --text: #1f2328;
   --text-dim: #59636e;
   --accent: #0969da;
-  --accent-soft: rgba(9, 105, 218, 0.10);
+  --accent-soft: rgba(9, 105, 218, 0.1);
   --danger: #cf222e;
   --ok: #1a7f37;
   --warn: #9a6700;
@@ -109,12 +109,25 @@ select:focus {
   border-radius: 50%;
   display: inline-block;
 }
-.connbar .status-dot.connected { background: var(--ok); }
-.connbar .status-dot.connecting { background: var(--warn); }
-.connbar .status-dot.disconnected { background: var(--text-dim); }
-.connbar .status-dot.error { background: var(--danger); }
-.connbar .crumb { color: var(--text-dim); }
-.connbar .crumb b { color: var(--text); font-weight: 500; }
+.connbar .status-dot.connected {
+  background: var(--ok);
+}
+.connbar .status-dot.connecting {
+  background: var(--warn);
+}
+.connbar .status-dot.disconnected {
+  background: var(--text-dim);
+}
+.connbar .status-dot.error {
+  background: var(--danger);
+}
+.connbar .crumb {
+  color: var(--text-dim);
+}
+.connbar .crumb b {
+  color: var(--text);
+  font-weight: 500;
+}
 
 /* Main area */
 .main {
@@ -202,7 +215,9 @@ select:focus {
   width: 12px;
   text-align: center;
 }
-.var-row .dot.tunable { color: var(--accent); }
+.var-row .dot.tunable {
+  color: var(--accent);
+}
 .var-row .name {
   flex: 1;
   overflow: hidden;
@@ -261,7 +276,9 @@ select:focus {
   font-size: 12px;
   color: var(--text-dim);
 }
-.tree-node > .label:hover { color: var(--text); }
+.tree-node > .label:hover {
+  color: var(--text);
+}
 .tree-node > .label .caret {
   width: 10px;
   display: inline-block;
@@ -405,7 +422,9 @@ button.ghost:hover {
   color: var(--text-dim);
   margin-left: 2px;
 }
-.plot-series .chip .rm:hover { color: var(--danger); }
+.plot-series .chip .rm:hover {
+  color: var(--danger);
+}
 .plot.paused .plot-canvas-wrap {
   box-shadow: inset 0 0 0 1px var(--warn);
 }
@@ -434,8 +453,12 @@ button.ghost:hover {
   padding: 0 3px;
   border-radius: 2px;
 }
-.time-corner.left { left: 0; }
-.time-corner.right { right: 0; }
+.time-corner.left {
+  left: 0;
+}
+.time-corner.right {
+  right: 0;
+}
 .time-corner.center {
   left: 50%;
   transform: translateX(-50%);
@@ -443,14 +466,15 @@ button.ghost:hover {
   font-weight: 600;
 }
 
-
 /* Tunables bar */
 .tunables {
   background: var(--panel);
   border-top: 1px solid var(--border);
   padding: 8px 12px;
   overflow-x: auto;
-  transition: background 0.12s, box-shadow 0.12s;
+  transition:
+    background 0.12s,
+    box-shadow 0.12s;
 }
 .tunables.over {
   background: var(--panel-2);
@@ -502,7 +526,10 @@ button.ghost:hover {
   padding: 2px 4px;
   font-size: 11px;
 }
-.tunable .units { color: var(--text-dim); font-size: 10px; }
+.tunable .units {
+  color: var(--text-dim);
+  font-size: 10px;
+}
 .tunable .err {
   color: var(--danger);
   font-size: 10px;
@@ -577,8 +604,13 @@ button.ghost:hover {
   font-size: 12px;
   color: var(--text-dim);
 }
-.segmented button:last-child { border-right: none; }
-.segmented button:hover { color: var(--text); background: var(--panel-2); }
+.segmented button:last-child {
+  border-right: none;
+}
+.segmented button:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
 .segmented button.active {
   background: var(--accent);
   color: var(--bg);

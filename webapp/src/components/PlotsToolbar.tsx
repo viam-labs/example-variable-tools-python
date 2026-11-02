@@ -137,7 +137,11 @@ export function PlotsToolbar({
       <button onClick={onPanRight} disabled={!hasPlots} title="Pan right">
         ▷
       </button>
-      <button onClick={onResetZoom} disabled={!hasPlots} title="Reset zoom (auto-fit)">
+      <button
+        onClick={onResetZoom}
+        disabled={!hasPlots}
+        title="Reset zoom (auto-fit)"
+      >
         ⟲
       </button>
 

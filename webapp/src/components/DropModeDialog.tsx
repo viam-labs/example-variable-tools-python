@@ -24,7 +24,8 @@ export function DropModeDialog({
           Drop {pathCount} variable{pathCount === 1 ? "" : "s"}
         </h2>
         <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-          You have {plotCount} plot{plotCount === 1 ? "" : "s"} in a {columns}-column grid.
+          You have {plotCount} plot{plotCount === 1 ? "" : "s"} in a {columns}
+          -column grid.
         </span>
         <div
           style={{
@@ -54,8 +55,8 @@ export function DropModeDialog({
             <div
               style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}
             >
-              One variable per plot, left-to-right then top-to-bottom.
-              Wraps if more variables than plots.
+              One variable per plot, left-to-right then top-to-bottom. Wraps if
+              more variables than plots.
             </div>
           </button>
           <button
@@ -67,8 +68,8 @@ export function DropModeDialog({
             <div
               style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}
             >
-              One variable per plot, top-to-bottom then left-to-right.
-              Wraps if more variables than plots.
+              One variable per plot, top-to-bottom then left-to-right. Wraps if
+              more variables than plots.
             </div>
           </button>
         </div>

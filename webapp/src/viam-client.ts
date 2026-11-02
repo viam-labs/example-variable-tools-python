@@ -110,7 +110,9 @@ async function probeSchema(
     }
     if (Object.keys(schemas).length === 0) return null;
     const aggSep =
-      (typeof obj.separator === "string" ? (obj.separator as string) : undefined) ??
+      (typeof obj.separator === "string"
+        ? (obj.separator as string)
+        : undefined) ??
       depSep ??
       "_";
     return { schemas, separator: aggSep };
