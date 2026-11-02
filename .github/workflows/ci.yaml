@@ -102,9 +102,7 @@ jobs:
           cache: npm
           cache-dependency-path: webapp/package-lock.json
 
-      # The committed lockfile lacks esbuild's and rollup's platform packages,
-      # so npm ci rejects it. npm install matches what `make webapp` runs.
-      - run: npm install
+      - run: npm ci
 
       - name: Build
         run: npm run build
