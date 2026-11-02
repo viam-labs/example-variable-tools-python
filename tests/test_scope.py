@@ -4,8 +4,8 @@ Deps are stubbed as objects with an ``async def do_command``. The
 Scope's ``_deps`` mapping is poked in directly, bypassing the
 framework's resource-name → ResourceBase dependency injection.
 """
-import pytest
 
+import pytest
 from viam.proto.app.robot import ComponentConfig
 from viam.utils import dict_to_struct
 
@@ -21,7 +21,12 @@ class StubDep:
 
     def __init__(self, values, schema=None, version=1):
         self._values = dict(values)
-        self._schema = schema or {"name": "stub", "version": version, "variables": [], "children": []}
+        self._schema = schema or {
+            "name": "stub",
+            "version": version,
+            "variables": [],
+            "children": [],
+        }
         self._version = version
 
     async def do_command(self, command):
@@ -137,9 +142,7 @@ async def test_vt_set_routes_to_dep():
     a = _make_agg()
     arm = StubDep({"pid_kp": 5.0})
     a._deps = {"arm": arm}
-    resp = await a.do_command(
-        {"command": "vt.set", "path": "arm_pid_kp", "value": 9.5}
-    )
+    resp = await a.do_command({"command": "vt.set", "path": "arm_pid_kp", "value": 9.5})
     assert resp["ok"] is True
     assert arm._values["pid_kp"] == 9.5
 
@@ -150,9 +153,7 @@ async def test_vt_set_routes_via_dot_for_backward_compat():
     a = _make_agg()
     arm = StubDep({"pid_kp": 5.0})
     a._deps = {"arm": arm}
-    resp = await a.do_command(
-        {"command": "vt.set", "path": "arm.pid_kp", "value": 9.5}
-    )
+    resp = await a.do_command({"command": "vt.set", "path": "arm.pid_kp", "value": 9.5})
     assert resp["ok"] is True
     assert arm._values["pid_kp"] == 9.5
 
@@ -160,9 +161,7 @@ async def test_vt_set_routes_via_dot_for_backward_compat():
 async def test_vt_set_unknown_dep_prefix():
     a = _make_agg()
     a._deps = {"arm": StubDep({"kp": 5.0})}
-    resp = await a.do_command(
-        {"command": "vt.set", "path": "nope_kp", "value": 1.0}
-    )
+    resp = await a.do_command({"command": "vt.set", "path": "nope_kp", "value": 1.0})
     assert resp == {"ok": False, "error": "unknown_variable"}
 
 
@@ -224,7 +223,10 @@ async def test_schema_drift_invalidates_cache():
     dep = StubDep({"x": 1.0}, version=1)
     a._deps = {"arm": dep}
     a._schemas = {
-        "arm": {"schema": {"name": "arm", "version": 1, "variables": [], "children": []}, "version": 1}
+        "arm": {
+            "schema": {"name": "arm", "version": 1, "variables": [], "children": []},
+            "version": 1,
+        }
     }
     # Bump dep version → dump returns version 5
     dep._version = 5

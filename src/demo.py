@@ -17,13 +17,13 @@ The 20 Hz background loop:
 * applies a 1st-order low-pass filter to the pose — translation lerps,
   orientation slerps — with tunable alphas you can scope live.
 """
+
 import asyncio
 import math
 import time
 from typing import ClassVar, List, Mapping, Optional, Sequence, Tuple
 
 from typing_extensions import Self
-
 from viam.components.sensor import Sensor
 from viam.logging import getLogger
 from viam.proto.app.robot import ComponentConfig
@@ -127,11 +127,11 @@ def _axis_angle_quat(
 _WAYPOINTS_DEF: List[
     Tuple[Tuple[float, float, float], Tuple[float, float, float], float]
 ] = [
-    ((  0.0,   0.0, 500.0), (0.0, 0.0, 1.0),   0.0),  # home, identity
-    ((300.0,   0.0, 300.0), (1.0, 0.0, 0.0),  90.0),  # tilt 90° around +X
-    ((300.0, 300.0, 200.0), (0.0, 1.0, 0.0),  90.0),  # tilt 90° around +Y
-    ((200.0, 200.0, 400.0), (1.0, 1.0, 0.0),  60.0),  # 60° around (1,1,0)
-    ((  0.0,   0.0, 500.0), (0.0, 0.0, 1.0),   0.0),  # back to home
+    ((0.0, 0.0, 500.0), (0.0, 0.0, 1.0), 0.0),  # home, identity
+    ((300.0, 0.0, 300.0), (1.0, 0.0, 0.0), 90.0),  # tilt 90° around +X
+    ((300.0, 300.0, 200.0), (0.0, 1.0, 0.0), 90.0),  # tilt 90° around +Y
+    ((200.0, 200.0, 400.0), (1.0, 1.0, 0.0), 60.0),  # 60° around (1,1,0)
+    ((0.0, 0.0, 500.0), (0.0, 0.0, 1.0), 0.0),  # back to home
 ]
 WAYPOINTS: List[Pose] = [
     pos + _axis_angle_quat(axis, angle) for pos, axis, angle in _WAYPOINTS_DEF
@@ -189,9 +189,7 @@ class _PidGains:
         self.kp = sub.add_double(
             "kp", 5.0, tunable=True, min=0.0, max=100.0, units="N/rad"
         )
-        self.ki = sub.add_double(
-            "ki", 0.1, tunable=True, min=0.0, units="N/(rad*s)"
-        )
+        self.ki = sub.add_double("ki", 0.1, tunable=True, min=0.0, units="N/(rad*s)")
 
 
 class _Diagnostics:
@@ -293,9 +291,7 @@ class Demo(Sensor, EasyResource):
         self._diag = _Diagnostics(self._registry)
         self._traj = _TrajectoryControls(self._registry)
         self._pose = _PoseChannel(self._registry, "pose", WAYPOINTS[0])
-        self._filtered = _PoseChannel(
-            self._registry, "filteredPose", WAYPOINTS[0]
-        )
+        self._filtered = _PoseChannel(self._registry, "filteredPose", WAYPOINTS[0])
         self._filter = _FilterParams(self._registry)
         # Runtime state — not registry-exposed, just internal bookkeeping.
         self._task: Optional[asyncio.Task] = None
@@ -338,9 +334,7 @@ class Demo(Sensor, EasyResource):
             self._task = asyncio.create_task(self._loop())
         except RuntimeError:
             self._task = None
-            LOGGER.debug(
-                "no running event loop at reconfigure; loop will not start"
-            )
+            LOGGER.debug("no running event loop at reconfigure; loop will not start")
 
     async def _loop(self) -> None:
         interval = 1.0 / TICK_HZ
@@ -349,9 +343,7 @@ class Demo(Sensor, EasyResource):
                 self._timing.tick()
                 t = time.monotonic() - self._t0
                 dt = (
-                    t - self._last_loop_t
-                    if self._last_loop_t is not None
-                    else interval
+                    t - self._last_loop_t if self._last_loop_t is not None else interval
                 )
                 self._last_loop_t = t
 
@@ -378,9 +370,7 @@ class Demo(Sensor, EasyResource):
                     self._traj.start.value = False
                 if self._traj_state == "running" and self._traj.pause.value:
                     self._traj_state = "paused"
-                elif (
-                    self._traj_state == "paused" and not self._traj.pause.value
-                ):
+                elif self._traj_state == "paused" and not self._traj.pause.value:
                     self._traj_state = "running"
 
                 total = max(0.001, self._traj.duration.value)

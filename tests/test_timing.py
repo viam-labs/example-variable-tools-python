@@ -3,6 +3,7 @@
 Time-based behavior is verified by mocking ``time.monotonic`` and
 ``time.time`` so the test is deterministic.
 """
+
 import math
 
 import pytest

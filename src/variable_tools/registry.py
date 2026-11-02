@@ -10,6 +10,7 @@ every structural mutation (add). The "effective version" reported by
 aggregator can detect schema drift by comparing the version it cached against
 the version returned with each ``vt.dump``.
 """
+
 import re
 from typing import Any, Dict, Optional, Sequence, Union
 
@@ -41,7 +42,9 @@ def _validate_name(name: str) -> None:
 class Variable:
     """Base class. Construct via ``Registry.add_*`` rather than directly."""
 
-    def __init__(self, name: str, *, tunable: bool = False, units: Optional[str] = None):
+    def __init__(
+        self, name: str, *, tunable: bool = False, units: Optional[str] = None
+    ):
         _validate_name(name)
         self.name = name
         self.tunable = bool(tunable)

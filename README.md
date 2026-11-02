@@ -129,8 +129,8 @@ Every variable carries a `tunable: bool`. Default is `False` (state). Set
 `tunable=True` for things clients can write:
 
 ```python
-pid.add_double("kp", 5.0, tunable=True, min=0.0, max=100.0)   # client-writable
-diagnostics.add_int("loop_count", 0)                            # state, default
+pid.add_double("kp", 5.0, tunable=True, min=0.0, max=100.0)  # client-writable
+diagnostics.add_int("loop_count", 0)  # state, default
 ```
 
 The library enforces it asymmetrically: over-the-wire `vt.set` returns

@@ -10,6 +10,7 @@ Wire-format contract (versioned):
     incremented when the JSON shape changes in a way that breaks naive
     clients. Bumps imply you need to update your reader.
 """
+
 from .dispatch import handle_command
 from .registry import (
     DEFAULT_PATH_SEP,

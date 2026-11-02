@@ -1,5 +1,3 @@
-import pytest
-
 from src.variable_tools import Registry, handle_command
 
 
@@ -77,18 +75,14 @@ def test_vt_paths():
 
 def test_vt_set_ok():
     r = _build_registry()
-    resp = handle_command(
-        r, {"command": "vt.set", "path": "pid_kp", "value": 9.5}
-    )
+    resp = handle_command(r, {"command": "vt.set", "path": "pid_kp", "value": 9.5})
     assert resp == {"ok": True, "previous": 5.0, "value": 9.5}
     assert r.get("pid_kp").value == 9.5
 
 
 def test_vt_set_unknown_variable():
     r = _build_registry()
-    resp = handle_command(
-        r, {"command": "vt.set", "path": "no.such", "value": 1}
-    )
+    resp = handle_command(r, {"command": "vt.set", "path": "no.such", "value": 1})
     assert resp == {"ok": False, "error": "unknown_variable"}
 
 
@@ -100,51 +94,39 @@ def test_vt_set_not_tunable():
 
 def test_vt_set_out_of_range_low():
     r = _build_registry()
-    resp = handle_command(
-        r, {"command": "vt.set", "path": "pid_kp", "value": -1.0}
-    )
+    resp = handle_command(r, {"command": "vt.set", "path": "pid_kp", "value": -1.0})
     assert resp == {"ok": False, "error": "out_of_range"}
 
 
 def test_vt_set_out_of_range_high():
     r = _build_registry()
-    resp = handle_command(
-        r, {"command": "vt.set", "path": "pid_kp", "value": 200.0}
-    )
+    resp = handle_command(r, {"command": "vt.set", "path": "pid_kp", "value": 200.0})
     assert resp == {"ok": False, "error": "out_of_range"}
 
 
 def test_vt_set_only_min_enforced():
     r = _build_registry()
     # pid.ki has min=0.0 but no max
-    resp = handle_command(
-        r, {"command": "vt.set", "path": "pid_ki", "value": 999.0}
-    )
+    resp = handle_command(r, {"command": "vt.set", "path": "pid_ki", "value": 999.0})
     assert resp["ok"] is True
     assert resp["value"] == 999.0
 
 
 def test_vt_set_wrong_type_for_double():
     r = _build_registry()
-    resp = handle_command(
-        r, {"command": "vt.set", "path": "pid_kp", "value": "abc"}
-    )
+    resp = handle_command(r, {"command": "vt.set", "path": "pid_kp", "value": "abc"})
     assert resp == {"ok": False, "error": "wrong_type"}
 
 
 def test_vt_set_invalid_enum_case():
     r = _build_registry()
-    resp = handle_command(
-        r, {"command": "vt.set", "path": "state", "value": "running"}
-    )
+    resp = handle_command(r, {"command": "vt.set", "path": "state", "value": "running"})
     assert resp == {"ok": False, "error": "invalid_enum_case"}
 
 
 def test_vt_set_enum_wrong_type():
     r = _build_registry()
-    resp = handle_command(
-        r, {"command": "vt.set", "path": "state", "value": 5}
-    )
+    resp = handle_command(r, {"command": "vt.set", "path": "state", "value": 5})
     assert resp == {"ok": False, "error": "wrong_type"}
 
 

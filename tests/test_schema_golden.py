@@ -4,6 +4,7 @@ Locks the JSON serialization of a known registry tree so that any change to
 the schema format is caught immediately. Anyone changing the schema shape
 must update the golden string deliberately.
 """
+
 import json
 
 from src.variable_tools import Registry
@@ -34,7 +35,7 @@ GOLDEN = (
     '{"max": 100.0, "min": 0.0, "name": "kp", "tunable": true, "type": "double", "units": "N/rad"}, '
     '{"min": 0.0, "name": "ki", "tunable": true, "type": "double"}'
     '], "version": 2}'
-    '], '
+    "], "
     '"name": "controller", '
     '"variables": ['
     '{"cases": ["idle", "moving", "fault"], "name": "state", "tunable": true, "type": "enum"}'
@@ -44,7 +45,7 @@ GOLDEN = (
     '{"name": "faultActive", "tunable": false, "type": "boolean"}, '
     '{"name": "loopTimeMs", "tunable": false, "type": "double", "units": "ms"}'
     '], "version": 3}'
-    '], '
+    "], "
     '"name": "golden", '
     '"variables": [], '
     '"version": 3}'
