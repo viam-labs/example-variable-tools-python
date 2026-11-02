@@ -25,7 +25,13 @@ export function ConnectionDialog({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    onConnect({ host: host.trim(), keyId: keyId.trim(), apiKey: apiKey.trim(), resource: resource.trim(), mode });
+    onConnect({
+      host: host.trim(),
+      keyId: keyId.trim(),
+      apiKey: apiKey.trim(),
+      resource: resource.trim(),
+      mode,
+    });
   };
 
   return (
@@ -82,7 +88,9 @@ export function ConnectionDialog({
           <select
             id="mode"
             value={mode}
-            onChange={(e) => setMode(e.target.value as ConnectionConfig["mode"])}
+            onChange={(e) =>
+              setMode(e.target.value as ConnectionConfig["mode"])
+            }
           >
             <option value="auto">Auto (try scope, fall back to direct)</option>
             <option value="scope">Scope (vt.schema_all)</option>

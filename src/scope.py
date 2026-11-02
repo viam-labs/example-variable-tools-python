@@ -27,11 +27,11 @@ is logged and skipped; the reading set is partial-but-valid.
     that dep's ``vt.set``. Unknown dep prefix returns
     ``{"ok": false, "error": "unknown_variable"}``.
 """
+
 import asyncio
 from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple
 
 from typing_extensions import Self
-
 from viam.components.sensor import Sensor
 from viam.logging import getLogger
 from viam.proto.app.robot import ComponentConfig
@@ -126,7 +126,9 @@ class Scope(Sensor, EasyResource):
         try:
             asyncio.create_task(self._refresh_schemas())
         except RuntimeError:
-            LOGGER.debug("no running event loop at reconfigure; schemas will refresh lazily")
+            LOGGER.debug(
+                "no running event loop at reconfigure; schemas will refresh lazily"
+            )
 
     async def _refresh_schemas(self) -> None:
         results = await asyncio.gather(
@@ -169,9 +171,7 @@ class Scope(Sensor, EasyResource):
                 continue
             values = result.get("values")
             if not isinstance(values, Mapping):
-                LOGGER.warning(
-                    "scope: %s vt.dump missing 'values' key", name
-                )
+                LOGGER.warning("scope: %s vt.dump missing 'values' key", name)
                 continue
             # Drift check: invalidate cached schema if version disagrees.
             cached = self._schemas.get(name)
@@ -188,9 +188,7 @@ class Scope(Sensor, EasyResource):
                     )
                     self._schemas.pop(name, None)
             for k, v in values.items():
-                key = (
-                    f"{name}{self._separator}{k}" if self._prefix_with_name else k
-                )
+                key = f"{name}{self._separator}{k}" if self._prefix_with_name else k
                 out[key] = v
         return out
 
@@ -232,7 +230,6 @@ class Scope(Sensor, EasyResource):
         if "." not in candidates:
             candidates.append(".")
         dep = None
-        head: str = ""
         rest: str = ""
         for sep_char in candidates:
             h, s, r = path.partition(sep_char)
@@ -240,7 +237,7 @@ class Scope(Sensor, EasyResource):
                 continue
             d = self._deps.get(h)
             if d is not None:
-                dep, head, rest = d, h, r
+                dep, rest = d, r
                 break
         if dep is None:
             return {"ok": False, "error": "unknown_variable"}

@@ -1,6 +1,6 @@
 import pytest
 
-from src.variable_tools import Boolean, Double, Enum, Integer, Registry
+from src.variable_tools import Registry
 
 
 def test_construct_empty_registry():

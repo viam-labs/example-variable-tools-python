@@ -102,7 +102,9 @@ export function App() {
   const [theme, setTheme] = useState<"dark" | "light">(initial.theme);
   const [windowSec, setWindowSec] = useState<number>(initial.windowSec);
   const [columns, setColumns] = useState<number>(initial.columns);
-  const [sidebarWidth, setSidebarWidth] = useState<number>(initial.sidebarWidth);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(
+    initial.sidebarWidth,
+  );
   const [pinnedTunables, setPinnedTunables] = useState<string[]>(
     initial.pinnedTunables,
   );
@@ -152,7 +154,17 @@ export function App() {
       sidebarWidth,
       pinnedTunables,
     });
-  }, [connection, plots, treeExpanded, pollRateHz, theme, windowSec, columns, sidebarWidth, pinnedTunables]);
+  }, [
+    connection,
+    plots,
+    treeExpanded,
+    pollRateHz,
+    theme,
+    windowSec,
+    columns,
+    sidebarWidth,
+    pinnedTunables,
+  ]);
 
   const pinTunable = useCallback((path: string) => {
     setPinnedTunables((cur) => (cur.includes(path) ? cur : [...cur, path]));
@@ -383,7 +395,10 @@ export function App() {
             setXOverride([(vLo + overshoot) / 1000, (vHi + overshoot) / 1000]);
           } else if (next < vLo) {
             const undershoot = vLo - next;
-            setXOverride([(vLo - undershoot) / 1000, (vHi - undershoot) / 1000]);
+            setXOverride([
+              (vLo - undershoot) / 1000,
+              (vHi - undershoot) / 1000,
+            ]);
           }
         }
         return next;
@@ -513,14 +528,9 @@ export function App() {
     setScrubTs(keyframes[0]);
   }, [keyframes, scrubTs]);
 
-  const updatePlot = useCallback(
-    (id: string, patch: Partial<PlotPanel>) => {
-      setPlots((p) =>
-        p.map((x) => (x.id === id ? { ...x, ...patch } : x)),
-      );
-    },
-    [],
-  );
+  const updatePlot = useCallback((id: string, patch: Partial<PlotPanel>) => {
+    setPlots((p) => p.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  }, []);
 
   /** Handle a drop of multiple paths onto a plot. If only one plot exists,
    * stack everything in there (no point asking). Otherwise, surface the
@@ -695,7 +705,9 @@ export function App() {
           latest={displayValues}
           width={sidebarWidth}
           onWidthChange={(w) =>
-            setSidebarWidth(Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, w)))
+            setSidebarWidth(
+              Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, w)),
+            )
           }
           onSet={handleSet}
           separator={session?.separator ?? "_"}
@@ -759,9 +771,7 @@ export function App() {
               ? () => setShowDialog(false)
               : undefined /* can't cancel from initial */
           }
-          errorMessage={
-            status.state === "error" ? status.message : undefined
-          }
+          errorMessage={status.state === "error" ? status.message : undefined}
         />
       )}
       {pendingDrop && (

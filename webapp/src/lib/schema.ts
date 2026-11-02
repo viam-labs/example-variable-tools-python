@@ -14,8 +14,12 @@ export function flattenSchema(
   const out: PathInfo[] = [];
   const walk = (node: SchemaTreeNode, registryPath: string): void => {
     for (const v of node.variables) {
-      const localPath = registryPath ? `${registryPath}${separator}${v.name}` : v.name;
-      const fullPath = prefixWithSource ? `${source}${separator}${localPath}` : localPath;
+      const localPath = registryPath
+        ? `${registryPath}${separator}${v.name}`
+        : v.name;
+      const fullPath = prefixWithSource
+        ? `${source}${separator}${localPath}`
+        : localPath;
       out.push({
         fullPath,
         localPath,
@@ -25,7 +29,9 @@ export function flattenSchema(
       });
     }
     for (const c of node.children) {
-      const next = registryPath ? `${registryPath}${separator}${c.name}` : c.name;
+      const next = registryPath
+        ? `${registryPath}${separator}${c.name}`
+        : c.name;
       walk(c, next);
     }
   };

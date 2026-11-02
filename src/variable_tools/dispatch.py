@@ -12,6 +12,7 @@ A host module wires the library into its ``do_command`` like:
 host falls through to its own dispatch. Returning a dict (even an error dict)
 means ``handle_command`` claimed the verb.
 """
+
 from typing import Any, Mapping, Optional
 
 from .registry import Double, Enum, Integer, Registry

@@ -5,6 +5,7 @@ example-visualizations-python and apriltag-tracker). The control loop is
 not started in these tests — instead the test mutates the registry
 directly so behavior is deterministic.
 """
+
 import math
 
 import pytest

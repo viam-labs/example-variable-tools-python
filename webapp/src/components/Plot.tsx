@@ -412,7 +412,8 @@ export function Plot({
     if (arrStr) {
       try {
         const parsed = JSON.parse(arrStr);
-        if (Array.isArray(parsed)) paths = parsed.filter((p) => typeof p === "string");
+        if (Array.isArray(parsed))
+          paths = parsed.filter((p) => typeof p === "string");
       } catch {
         // fall through
       }
@@ -576,28 +577,29 @@ export function Plot({
             }}
           />
         )}
-        {xRange && (() => {
-          const area = plotArea();
-          if (!area) return null;
-          return (
-            <div
-              className="time-corner-band"
-              style={{
-                position: "absolute",
-                bottom: 2,
-                left: area.left,
-                width: area.width,
-                pointerEvents: "none",
-              }}
-            >
-              <div className="time-corner left">{startLabel}</div>
-              <div className="time-corner right">{endLabel}</div>
-              {scrubLabel && (
-                <div className="time-corner center">{scrubLabel}</div>
-              )}
-            </div>
-          );
-        })()}
+        {xRange &&
+          (() => {
+            const area = plotArea();
+            if (!area) return null;
+            return (
+              <div
+                className="time-corner-band"
+                style={{
+                  position: "absolute",
+                  bottom: 2,
+                  left: area.left,
+                  width: area.width,
+                  pointerEvents: "none",
+                }}
+              >
+                <div className="time-corner left">{startLabel}</div>
+                <div className="time-corner right">{endLabel}</div>
+                {scrubLabel && (
+                  <div className="time-corner center">{scrubLabel}</div>
+                )}
+              </div>
+            );
+          })()}
       </div>
       <div className="plot-series">
         {plot.series.length === 0 && (
@@ -654,5 +656,7 @@ export function Plot({
 
 function getCssVar(name: string): string {
   if (typeof window === "undefined") return "";
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
 }

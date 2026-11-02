@@ -13,6 +13,7 @@ read-only via ``vt.set`` (overrides would be meaningless).
 
 The jitter window defaults to the most recent 64 intervals.
 """
+
 from __future__ import annotations
 
 import time
@@ -54,7 +55,7 @@ class SystemTiming:
                 var = sum((x - mean) ** 2 for x in self._intervals) / len(
                     self._intervals
                 )
-                self._jitter.value = var ** 0.5
+                self._jitter.value = var**0.5
         self._last_tick = now
         self._count.value = self._count.value + 1
 
